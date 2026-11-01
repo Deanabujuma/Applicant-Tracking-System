@@ -1,8 +1,8 @@
-import re
-
 import pytest
 
 from openings.models import JobOpening, Skill
+
+from .test_opening_specific_skills import assigned_skill_names, submitted_skill_ids
 
 
 @pytest.fixture
@@ -49,13 +49,6 @@ def test_removing_shared_skill_from_one_opening_leaves_skill_and_other_openings(
     assert set(python.openings.all()) == {opening_b}
 
 
-def checkbox_tag(page, skill):
-    """The rendered <input> tag for a skill's checkbox; fails if it is missing."""
-    match = re.search(rf'<input[^>]*name="skills"[^>]*value="{skill.pk}"[^>]*>', page)
-    assert match, f"no skills checkbox for {skill.name!r}"
-    return match.group(0)
-
-
 @pytest.mark.django_db
 def test_add_skill_inline_returns_skills_fragment_and_leaves_opening_alone(
     employee_client,
@@ -85,10 +78,11 @@ def test_add_skill_inline_returns_skills_fragment_and_leaves_opening_alone(
     assert "<html" not in page.lower()
     assert "<body" not in page.lower()
 
-    # New skill ticked, previous selection still ticked, unselected left unticked.
-    assert "checked" in checkbox_tag(page, kubernetes)
-    assert "checked" in checkbox_tag(page, python)
-    assert "checked" not in checkbox_tag(page, sql)
+    # New skill and the previous pending selection are kept; the unselected one
+    # isn't added. (Updated for opening-specific skills, 2026-11-01: the form now
+    # submits hidden inputs and lists assigned skills, instead of ticked checkboxes.)
+    assert submitted_skill_ids(page) == {kubernetes.pk, python.pk}
+    assert assigned_skill_names(page) == {"Kubernetes", "Python"}
 
     # No JobOpening was created or updated.
     assert JobOpening.objects.count() == 1
@@ -98,10 +92,15 @@ def test_add_skill_inline_returns_skills_fragment_and_leaves_opening_alone(
 
 
 @pytest.mark.django_db
-def test_add_skill_inline_rejects_case_only_duplicate_and_keeps_selection(
+def test_add_skill_inline_reuses_case_only_duplicate_and_keeps_selection(
     employee_client,
 ):
-    """A duplicate name (ignoring case) is refused with a message; ticks are kept."""
+    """A name differing only in case reuses the existing skill; selections are kept.
+
+    Updated for opening-specific skills (2026-11-01). It was
+    test_add_skill_inline_rejects_case_only_duplicate_and_keeps_selection, which
+    expected a "duplicate" error. That behavior was intentionally replaced by reuse.
+    """
     python = Skill.objects.create(name="Python")
     sql = Skill.objects.create(name="SQL")
 
@@ -122,9 +121,9 @@ def test_add_skill_inline_rejects_case_only_duplicate_and_keeps_selection(
     assert "<html" not in page.lower()
     assert "<body" not in page.lower()
 
-    # A clear validation error is shown in the fragment.
-    assert "A skill with this name already exists." in page
+    # No error: the existing record is reused instead of rejected.
+    assert "A skill with this name already exists." not in page
 
-    # The previous selection is kept, and nothing else gets ticked.
-    assert "checked" in checkbox_tag(page, sql)
-    assert "checked" not in checkbox_tag(page, python)
+    # The previous selection is kept, the existing Python is added, nothing else.
+    assert submitted_skill_ids(page) == {sql.pk, python.pk}
+    assert assigned_skill_names(page) == {"SQL", "Python"}

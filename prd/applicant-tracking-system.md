@@ -52,9 +52,9 @@ Records with hiring history are never destroyed. Candidates are archived instead
 20. As a hiring employee, I want to edit a job opening, so that I can correct or update its details.
 21. As a hiring employee, I want to create openings with the same title as existing ones, so that the company can hire for the same role more than once or run parallel openings.
 22. As a hiring employee, I want openings to be identified by more than their title (department and status in lists, plus a unique record identity), so that I can tell same-titled openings apart.
-23. As a hiring employee, I want to attach any number of existing skills to an opening, so that its requirements are clear.
+23. As a hiring employee, I want to attach any number of existing skills to an opening, so that its requirements are clear. *(Since the second 2026-11-01 change, skills are attached by name through Add Skill, per story 78, not by ticking a list of every skill.)*
 24. As a hiring employee, I want to add a new skill directly from the opening form without leaving the page, so that I don't lose my work when a skill is missing.
-25. As a hiring employee, I want skill names to be unique regardless of capitalization, so that "Python" and "python" can't both exist.
+25. As a hiring employee, I want skill names to be unique regardless of capitalization, so that "Python" and "python" can't both exist. *(Since the second 2026-11-01 change, the database constraint still enforces this, but adding a name that differs only in case now reuses the existing skill, per story 78, instead of showing an error.)*
 26. As a hiring employee, I want the same skill to be shared across many openings, so that skills stay consistent across the department.
 27. As a hiring employee, I want to remove a skill from an opening without deleting the skill itself, so that other openings using it are unaffected.
 28. As a hiring employee, I want to close an opening after confirming in a dialog, so that it stops accepting new applications.
@@ -66,8 +66,16 @@ Records with hiring history are never destroyed. Candidates are archived instead
 
 *Added by user-requested change, 2026-11-01 (numbered after the original 74 stories so existing references stay valid):*
 
-75. As a hiring employee, I want a Manage Skills page, linked from the Openings area, that lists every skill with the number of openings using it, so that I can find and remove unwanted skills without Django Admin.
-76. As a hiring employee, I want to permanently delete a skill only after confirming on a page that shows its name and how many openings will lose it, with Cancel changing nothing, so that I don't remove a skill by accident and openings themselves are never deleted or changed.
+75. ~~As a hiring employee, I want a Manage Skills page, linked from the Openings area, that lists every skill with the number of openings using it, so that I can find and remove unwanted skills without Django Admin.~~
+76. ~~As a hiring employee, I want to permanently delete a skill only after confirming on a page that shows its name and how many openings will lose it, with Cancel changing nothing, so that I don't remove a skill by accident and openings themselves are never deleted or changed.~~
+
+*Superseded by a second user-requested change, 2026-11-01 (opening-specific skill management):* stories 75–76 were implemented in Phase 3, then withdrawn. Ordinary employees no longer have a global Manage Skills page or any way to permanently delete a skill. Administrators can clean up skills in Django Admin. Stories 77–79 replace them.
+
+*Added by the second user-requested change, 2026-11-01:*
+
+77. As a hiring employee, I want an opening's create and edit form to show only the skills assigned to that opening, not the whole shared skill list, so that I can see and manage exactly what this opening requires. A new opening starts with no skills.
+78. As a hiring employee, I want typing the name of a skill that already exists, in any capitalization, to attach that existing shared skill to this opening only, with suggestions of existing names as I type, so that skills are reused instead of duplicated and no other opening changes.
+79. As a hiring employee, I want a "Remove a skill from this opening" control below Add Skill, so that I can unassign a skill from this opening only. Adding and removing take effect only when I save, and Cancel discards them.
 
 ### Applications
 
@@ -138,7 +146,7 @@ Records with hiring history are never destroyed. Candidates are archived instead
 - **Candidate:** first name, last name, email, and source are required. Phone, source detail, and notes are optional. Archived flag (default false), created and updated timestamps. Email is unique ignoring capitalization, enforced by a database constraint.
 - **Source:** Django `TextChoices` with Job Board, Referral, Company Website, Other. One primary source per candidate. No Source model.
 - **JobOpening:** title and department are required (department is plain text, not a model). Description and location are optional. Status (Open by default, or Closed), created and updated timestamps. Titles are not unique. Many-to-many relationship to Skill, which may be empty.
-- **Skill:** a name that is unique ignoring capitalization, enforced by a database constraint. *(Changed 2026-11-01 at the user's request; originally "No in-app deletion (Django admin only).")* Employees can permanently delete a skill from the in-app Manage Skills page after confirmation. Deleting a skill removes its many-to-many links to openings and never deletes or modifies the openings.
+- **Skill:** a name that is unique ignoring capitalization, enforced by a database constraint. *(Changed 2026-11-01 at the user's request; originally "No in-app deletion (Django admin only).")* ~~Employees can permanently delete a skill from the in-app Manage Skills page after confirmation. Deleting a skill removes its many-to-many links to openings and never deletes or modifies the openings.~~ *(Superseded by the second 2026-11-01 change.)* **Current rule:** employees can't delete skills; they only add skills to or remove skills from individual openings. `Skill` is registered in Django Admin so administrators can clean up unused skills. Deleting a skill removes its links to openings and never deletes or modifies the openings.
 - **Application:** candidate and opening foreign keys, both with `on_delete=PROTECT` and a reverse relation named `applications`. Also stage, previous stage (nullable), stage-changed-by (the staff user), stage-changed-at, and created and updated timestamps. A database unique constraint on (candidate, opening).
 - **Stages:** `TextChoices` for Applied, Screening, Interview, Final Review, Offer, Hired, Rejected, Withdrawn. Applied through Offer are *active*. Hired, Rejected, and Withdrawn are *closed*.
 - **Protected deletion:** `PROTECT` on both foreign keys means a candidate or opening with any application can't be deleted. Records without applications can be deleted permanently. Deleting an opening removes its skill links but not the skills.
@@ -174,8 +182,13 @@ Records with hiring history are never destroyed. Candidates are archived instead
 ### Openings: close, reopen, skills
 
 - Close and reopen toggle the status freely, each behind a Confirm/Cancel dialog. Closing doesn't affect existing applications. No reason field is required.
-- The opening form lets staff select existing skills and add a new skill inline through HTMX without leaving the form. A duplicate name (ignoring capitalization) shows a validation message.
-- *(Added 2026-11-01.)* A Manage Skills page lists skills with their opening counts. Delete goes to a server-rendered confirmation page (GET changes nothing); only a confirming POST deletes. Cancel returns to the list unchanged.
+- ~~The opening form lets staff select existing skills and add a new skill inline through HTMX without leaving the form. A duplicate name (ignoring capitalization) shows a validation message.~~ *(Superseded by the second 2026-11-01 change; see below.)*
+- ~~*(Added 2026-11-01.)* A Manage Skills page lists skills with their opening counts. Delete goes to a server-rendered confirmation page (GET changes nothing); only a confirming POST deletes. Cancel returns to the list unchanged.~~ *(Withdrawn by the second 2026-11-01 change. The page, its views, URLs, and templates are removed.)*
+- **Current (second 2026-11-01 change): opening-specific skills.** The create and edit forms show only the skills assigned to that opening, as badges backed by hidden form inputs. A new opening starts with none. No new models: the existing `JobOpening.skills` many-to-many already gives each opening its own set of links to shared Skill records.
+  - **Add Skill** (HTMX, without leaving the form) takes a name, with a native `<datalist>` suggesting existing names. A name that matches an existing skill, ignoring capitalization, reuses that record. A new name may immediately create a new shared Skill record. Either way, no JobOpening record and no skill assignment changes until Save. The skill is only added to the pending form. A name already on this opening shows a message. Blank or too-long names show validation errors.
+  - **"Remove a skill from this opening"** is a dropdown of the assigned skills with a Remove button, placed below Add Skill. It drops the skill from the pending form only.
+  - Add and Remove never load or save the JobOpening, and they leave the rest of the unsaved form untouched. **Save** is the only step that changes the opening's skill links, and it changes only that opening's links. **Cancel** discards pending additions and removals.
+  - Known limitation: a new skill created by Add and then abandoned with Cancel stays as an unused Skill record, assigned to no opening. Administrators can remove it in Django Admin.
 
 ### Hiring workspace and HTMX behavior
 
@@ -200,7 +213,7 @@ Records with hiring history are never destroyed. Candidates are archived instead
 - pytest with pytest-django, following the course's TDD process: tests are reviewed and approved before implementation, observed failing (RED), then made to pass (GREEN).
 - Priority tiers:
   1. **Transition rules (no database):** Hired only from Offer, Hired permanent, skips allowed up to Offer, no backward moves, Rejected and Withdrawn reachable from every active stage, Undo to the actual previous stage, no double Undo, Undo available again after a new move, no Undo from Hired.
-  2. **Model and database rules:** `move_to()` and `undo()` update previous stage, stage-changed-by, and stage-changed-at. Duplicate application constraint. Case-insensitive unique email and skill name. `PROTECT` blocks deleting candidates and openings with applications, while records without applications can be deleted. Deleting an opening keeps its skills. Deleting a skill removes its opening links but keeps the openings. Archive is blocked by active applications and reports them. Editing an archived candidate's information leaves them archived.
+  2. **Model and database rules:** `move_to()` and `undo()` update previous stage, stage-changed-by, and stage-changed-at. Duplicate application constraint. Case-insensitive unique email and skill name. `PROTECT` blocks deleting candidates and openings with applications, while records without applications can be deleted. Deleting an opening keeps its skills. Deleting a skill (now through Django Admin only) removes its opening links but keeps the openings. Saving an opening changes only that opening's skill links. Archive is blocked by active applications and reports them. Editing an archived candidate's information leaves them archived.
   3. **Form validation:** no applications to closed openings, for archived candidates, or duplicates. New applications start in Applied. Choices are limited correctly.
   4. **Views and HTMX:** login required on all views. A deactivated employee account can't log in and can't access protected ATS pages. The confirm modal shows the right message for each move type, including the permanent-Hired warning. A stale or invalid POST is rejected. Move and Undo responses include the workspace partial and the out-of-band sidebar update. Filter state from the URL is respected.
 - Archiving tests need Application records, so they live with `hiring`'s tests, next to the code that defines "active."
@@ -224,6 +237,7 @@ Records with hiring history are never destroyed. Candidates are archived instead
 - A Source model, multiple sources per candidate, or staff-managed source categories.
 - A Department model.
 - ~~In-app skill deletion or a standalone skill management page.~~ *(Removed from Out of Scope 2026-11-01 at the user's request; now covered by stories 75–76.)*
+- In-app permanent skill deletion or a global skill management page for employees. *(Returned to Out of Scope by the second 2026-11-01 change. Skill cleanup is done in Django Admin.)*
 - Unique job opening titles.
 - Duplicate-person detection beyond case-insensitive unique email.
 - Email notifications, scheduling interviews, resume uploads, and reporting or analytics beyond the dashboard stage counts.

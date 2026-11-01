@@ -1,12 +1,7 @@
-from django.contrib import messages
-from django.db.models import Count
-from django.db.models.functions import Lower
 from django.shortcuts import render
-from django.urls import reverse_lazy
 from django.views.decorators.http import require_POST
 from django.views.generic import (
     CreateView,
-    DeleteView,
     DetailView,
     ListView,
     UpdateView,
@@ -38,62 +33,60 @@ class JobOpeningUpdateView(UpdateView):
     context_object_name = "opening"
 
 
-class SkillListView(ListView):
-    # Every opening using a skill is counted, Open and Closed alike. The ordering
-    # is explicit because Django does not apply Meta.ordering to this aggregate
-    # (GROUP BY) query; it matches Skill.Meta.ordering: A-Z ignoring case, then pk.
-    queryset = Skill.objects.annotate(opening_count=Count("openings")).order_by(
-        Lower("name"), "pk"
-    )
-    context_object_name = "skills"
+@require_POST
+def add_skill_inline(request):
+    """HTMX: add a skill, by name, to the opening form's pending skills.
 
-
-class SkillDeleteView(DeleteView):
-    """GET shows a confirmation page and changes nothing; only a POST deletes.
-
-    Deleting a Skill removes its rows in the opening-skill link table; the
-    JobOpening rows themselves are never deleted or saved.
+    An existing name (any capitalization) reuses that shared Skill; a new name
+    creates one. The skill is only added to the returned fragment's hidden
+    inputs. This never loads, creates, or saves a JobOpening or its skill links,
+    so nothing is assigned until the opening form is saved, and the rest of the
+    unsaved form is left untouched in the browser.
     """
+    name = request.POST.get("new_skill_name", "")
+    skill_form = SkillForm(data={"name": name})
+    notice = ""
+    selected = _pending_skill_ids(request)
 
-    # Count every opening using the skill, Open and Closed alike.
-    queryset = Skill.objects.annotate(opening_count=Count("openings"))
-    context_object_name = "skill"
-    success_url = reverse_lazy("openings:skill_list")
+    existing = Skill.objects.filter(name__iexact=name.strip()).first()
+    if existing is not None:
+        if existing.pk in selected:
+            notice = f"{existing.name} is already on this opening."
+        else:
+            selected.append(existing.pk)
+        skill_form = SkillForm()  # clear the input
+    elif skill_form.is_valid():  # a new name: blank/length validation still apply
+        selected.append(skill_form.save().pk)
+        skill_form = SkillForm()
 
-    def form_valid(self, form):
-        # Capture what is being deleted before the row is gone.
-        name = self.object.name
-        count = self.object.opening_count
-        response = super().form_valid(form)
-        noun = "opening" if count == 1 else "openings"
-        messages.success(
-            self.request, f'Deleted skill "{name}" (removed from {count} {noun}).'
-        )
-        return response
+    return _skills_fragment(request, selected, skill_form, notice)
 
 
 @require_POST
-def add_skill_inline(request):
-    """HTMX: create one Skill and return the re-rendered skills checklist.
+def remove_skill_inline(request):
+    """HTMX: drop one skill from the opening form's pending skills.
 
-    Works only with Skill records. It never loads, creates, or saves a JobOpening,
-    so the rest of the unsaved opening form is left untouched in the browser.
+    Only the returned fragment changes. No Skill is deleted, and no JobOpening
+    or skill link is loaded or saved, so Save stays the only step that changes an
+    opening's skills, and Cancel discards the removal. An ID that isn't among the
+    pending skills (forged, nonexistent, or junk) removes nothing.
     """
-    skill_form = SkillForm(data={"name": request.POST.get("new_skill_name", "")})
+    remove_id = request.POST.get("remove_skill", "")
+    selected = [pk for pk in _pending_skill_ids(request) if str(pk) != remove_id]
+    return _skills_fragment(request, selected, SkillForm())
 
-    # Keep the employee's current ticks, but only for real, existing skills.
+
+def _pending_skill_ids(request):
+    """The posted pending skill IDs, keeping only real, existing skills."""
     posted_ids = [v for v in request.POST.getlist("skills") if v.isdigit()]
-    selected = list(
-        Skill.objects.filter(pk__in=posted_ids).values_list("pk", flat=True)
-    )
+    return list(Skill.objects.filter(pk__in=posted_ids).values_list("pk", flat=True))
 
-    if skill_form.is_valid():
-        selected.append(skill_form.save().pk)
-        skill_form = SkillForm()  # clear the input after a successful add
 
+def _skills_fragment(request, selected, skill_form, notice=""):
+    """Re-render the opening form's skills section for the given pending IDs."""
     skills_field = JobOpeningForm(initial={"skills": selected})["skills"]
     return render(
         request,
         "openings/_skills_field.html",
-        {"field": skills_field, "skill_form": skill_form},
+        {"field": skills_field, "skill_form": skill_form, "skill_notice": notice},
     )

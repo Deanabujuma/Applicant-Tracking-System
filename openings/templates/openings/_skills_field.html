@@ -1,11 +1,17 @@
-{# Skills checklist + inline "Add skill". Rendered inside the opening form, and returned alone by openings:skill_create (HTMX swaps #skills-field). #}
+{# This opening's skills, "Add skill", and "Remove a skill". Rendered inside the opening form, and returned alone by openings:skill_create / skill_remove (HTMX swaps #skills-field). Only the form's own (pending) skills are shown; their IDs travel as hidden inputs, and nothing is saved until the opening form is saved. #}
 <div id="skills-field" class="form-control w-full">
-  <span class="label-text font-medium">{{ field.label }}</span>
+  {% with skills=field.form.assigned_skills %}
+  <span class="label-text font-medium">Skills for this opening</span>
+  <ul id="assigned-skills" class="flex flex-wrap gap-1 my-1">
+    {% for skill in skills %}<li class="badge badge-outline">{{ skill.name }}</li>{% endfor %}
+  </ul>
+  {% if not skills %}<p class="text-sm opacity-70">No skills yet.</p>{% endif %}
   {{ field }}
   {% for error in field.errors %}<span class="text-error text-sm">{{ error }}</span>{% endfor %}
   <div class="flex gap-2 mt-2">
     <input type="text" name="new_skill_name" value="{{ skill_form.name.value|default_if_none:'' }}"
-           maxlength="100" placeholder="New skill" aria-label="New skill name"
+           maxlength="100" placeholder="Skill name" aria-label="Skill name to add"
+           list="skill-suggestions" autocomplete="off"
            class="input input-sm"
            onkeydown="if (event.key === 'Enter') { event.preventDefault(); this.nextElementSibling.click(); }">
     <button type="button" class="btn btn-sm"
@@ -15,6 +21,25 @@
             hx-target="#skills-field"
             hx-swap="outerHTML">Add skill</button>
   </div>
+  {# Suggestions only: choosing one just fills the box; Add skill still decides. #}
+  <datalist id="skill-suggestions">{% for name in field.form.skill_suggestions %}<option value="{{ name }}">{% endfor %}</datalist>
+  {% if skill_notice %}<span class="text-info text-sm">{{ skill_notice }}</span>{% endif %}
   {% for error in skill_form.non_field_errors %}<span class="text-error text-sm">{{ error }}</span>{% endfor %}
   {% for error in skill_form.name.errors %}<span class="text-error text-sm">{{ error }}</span>{% endfor %}
+  {% if skills %}
+  <label for="remove-skill" class="label-text font-medium mt-3">Remove a skill from this opening</label>
+  <div class="flex gap-2 mt-1">
+    <select id="remove-skill" name="remove_skill" class="select select-sm">
+      {% for skill in skills %}<option value="{{ skill.pk }}">{{ skill.name }}</option>{% endfor %}
+    </select>
+    <button type="button" class="btn btn-sm btn-outline"
+            hx-post="{% url 'openings:skill_remove' %}"
+            hx-include="#skills-field input, #remove-skill"
+            hx-params="skills,remove_skill"
+            hx-target="#skills-field"
+            hx-swap="outerHTML">Remove</button>
+  </div>
+  <p class="text-sm opacity-70">Skill changes are saved when you click Save. Cancel discards them.</p>
+  {% endif %}
+  {% endwith %}
 </div>

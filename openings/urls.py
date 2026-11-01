@@ -9,9 +9,6 @@ urlpatterns = [
     path("new/", views.JobOpeningCreateView.as_view(), name="create"),
     path("<int:pk>/", views.JobOpeningDetailView.as_view(), name="detail"),
     path("<int:pk>/edit/", views.JobOpeningUpdateView.as_view(), name="edit"),
-    path("skills/", views.SkillListView.as_view(), name="skill_list"),
     path("skills/new/", views.add_skill_inline, name="skill_create"),
-    path(
-        "skills/<int:pk>/delete/", views.SkillDeleteView.as_view(), name="skill_delete"
-    ),
+    path("skills/remove/", views.remove_skill_inline, name="skill_remove"),
 ]
