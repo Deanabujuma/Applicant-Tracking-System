@@ -29,6 +29,53 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-01 — Phase 1 commit and push, and Phase 2 (candidate records) via `/implement`
+
+*(Continues the same session as the Phase 1 entry below. Long prompts are condensed to their substance; nothing is added that the prompt did not say.)*
+
+### Prompts
+1. Approved the Phase 1 PROMPTS.md entry. Run `git status`, check that only the intended Phase 1 files would be committed, confirm `db.sqlite3`, `.venv`, the built Tailwind CSS, and the Tailwind binary are excluded, and show the status and a proposed commit message. Don't commit or push.
+2. Approved the 39 files and the commit message. Stage and commit only those files, including PROMPTS.md, keeping the Co-Authored-By line. Show the commit ID and a clean working tree. Don't push.
+3. Push the Phase 1 commit (`f740f01`) to `origin/main`, then verify the branch matches and the tree is clean. Don't begin Phase 2.
+4. Begin Phase 2 with `/implement`, following `CLAUDE.md` and the course TDD process. Review the acceptance criteria, propose up to three test-first behaviors, explain each, and list any decisions the PRD and plan don't settle. Stop for approval. No Phase 3, no unrelated changes.
+5. Approved the three behaviors and decisions 1–9, with two clarifications: (1) remove surrounding spaces from emails during normal input validation and keep the form's duplicate check consistent with the database's case-insensitive constraint, with no new normalization system or dependencies; (2) order the list by `last_name`, `first_name`, then pk. Keep `is_archived` in the model but don't implement archiving until Phase 6. Start with Test 1: write it, run it, show RED, and stop.
+6. Approved Test 1 and its RED. Add the `Lower("email")` constraint, create the migration, re-run Test 1 for GREEN, and run the Phase 1 tests. Explain and stop before Test 2.
+7. Approved the recommended Ruff fix: add the migrations pattern to `extend-exclude`, change `Candidate.Meta.ordering` and `constraints` to tuples, and keep `RUF012` on everywhere else. Don't hand-edit the generated migration. Run pytest, Ruff, and `makemigrations --check`, then stop.
+8. Chose Option 1: regenerate `candidates/migrations/0001_initial.py` with `makemigrations`, since it was neither applied nor committed. Don't rewrite it by hand, delete other migrations, or reset the local database. Run all checks and stop.
+9. Approved the regenerated migration and Test 1 GREEN. Write Test 2 (create with only the required fields), show RED, explain why it fails, and stop.
+10. Approved Test 2 and its RED. Build the minimum for GREEN: a `CandidateForm` ModelForm, create and detail views, namespaced candidate URLs and the project URL include, form and detail templates extending the base template, and email trimming that keeps capitalization. Run Test 2, the full suite, Ruff, and Django checks, then stop before Test 3.
+11. Approved Test 2 GREEN. Write Test 3 (duplicate email rejected with a link to the existing record), show RED, explain precisely why it fails, and stop. The test must check that no duplicate is created and that the link is safe and usable.
+12. Approved Test 3 and its RED. Build the proposed GREEN: `CandidateForm.clean_email()` with a case-insensitive check, skipping the candidate being edited; a clear message; a link drawn with normal template escaping; no `mark_safe` and no raw HTML in messages; and the database constraint kept as the final safeguard. Run all checks and stop before the list and edit pages.
+13. Approved Test 3 GREEN. Finish the rest of Phase 2: the list at `/candidates/` ordered by last name, first name, pk; the edit page using `CandidateForm`; a Candidates header link; tests for valid and invalid sources, for editing without changing one's own email, for changing to another candidate's email being rejected with a link, and for login on every candidate page. Run all checks, summarize, and stop before manual browser testing.
+14. Reported the manual browser tests as `jdoe`: the list was empty at first; Ana Lopez was created with only the required fields; the detail page was correct; a duplicate email in different capitals got the right error and link; Ana's phone, source detail, and notes were edited; and the list had only one record. Finish Phase 2: update PROMPTS.md, review `git status`, run all checks, commit, push to `main`, and report the hash, push confirmation, and final status (this prompt).
+
+### Summary
+- **Outcome:**
+  - **Phase 1 committed and pushed:** `f740f01`, 39 files.
+  - **Phase 2 complete in the `candidates` app.**
+    - **Model and migration:** the `Source` `TextChoices` (job_board, referral, company_website, other); the `Candidate` model with the approved fields and `is_archived` (default false, not used until Phase 6); tuple `Meta` ordering `("last_name", "first_name", "pk")`; and `UniqueConstraint(Lower("email"))` with a shared `DUPLICATE_EMAIL_MESSAGE`. One migration, `0001_initial.py`, created by `makemigrations`.
+    - **Form:** `CandidateForm` with `clean_email()`, which does the case-insensitive check, skips the candidate being edited, and saves the matching candidate as `form.duplicate_candidate` so the template can link to it.
+    - **Pages:** class-based list, create, detail, and edit views under the `candidates` namespace, with DaisyUI templates and a Candidates header link.
+  - **TDD results:**
+    - **Test 1** (the database rejects emails that differ only by capitals): RED with `Failed: DID NOT RAISE IntegrityError`. The `Lower("email")` constraint made it GREEN.
+    - **Test 2** (create with only the required fields, email spaces removed but capitals kept, redirect to a detail page showing the source label): RED with `assert 404 == 302`, because no candidate routes existed. The form, views, URLs, and templates made it GREEN. The trimming came from Django's `EmailField` (`strip=True`) with no extra code.
+    - **Test 3** (a case-only duplicate is refused, nothing is saved, and an escaped link to the existing record is shown): RED on `assert 'href="/candidates/1/"' in page`. The constraint already blocked the save and showed the message, but there was no link. `clean_email()` and the template link made it GREEN. A scratchpad probe confirmed the error appears once, on the email field, with no second error from the constraint.
+  - **Other Phase 2 tests:** 20 normal tests covering source choices, list order and links, editing, own-email and other-email edits, and login on every candidate page and on anonymous POSTs. Final: 33 tests passed; Ruff check and format check clean; `manage.py check` clean; `makemigrations --check` reports no changes.
+  - **Manual browser tests (user, as `jdoe`):** all passed (see prompt 14).
+- **Deviations:**
+  - **User clarifications to my proposal:** the stable pk tie-breaker in the list order, and an explicit rule that email trimming stays within normal validation and matches the constraint.
+  - **Ruff `RUF012`:** Ruff 0.17's default rules flagged Django `Meta` and migration lists. I recommended excluding migrations from Ruff and using tuples in `Meta`; the user approved and asked to keep `RUF012` on elsewhere.
+  - **Extra migration avoided:** I didn't foresee that switching `ordering` from a list to a tuple would make Django want a new migration. I offered three options, and the user chose to regenerate `0001_initial.py` rather than add a migration that changed nothing in the database.
+  - **Cosmetic widget dropped:** to keep the GREEN minimal and avoid suppressing `RUF012`, I removed a 4-row notes `Textarea` widget instead of keeping it.
+  - **Literal paths in Test 2:** it uses the plan's fixed paths (`/candidates/new/`, `/candidates/<pk>/`) rather than `reverse()`, so the RED would be an assertion failure and not a `NoReverseMatch` error.
+- **Sideways:**
+  - **Phase 1 push check:** after the push, my check command errored (`fatal: Needed a single revision`) because I passed two revisions to `git rev-parse --short`. The push itself had succeeded; re-running one revision at a time confirmed local and remote both at `f740f01`.
+  - **Ruff surprises:** Ruff failed twice in Phase 2: on `RUF012` after Test 1's GREEN, and on import order plus the widget dict after Test 2's GREEN. Both were reported; the first was settled by the user, and the second was a mechanical fix.
+  - **Duplicate-error probe:** my first two attempts to run the scratchpad probe failed with setup errors because it ran outside the project's pytest config. Adding `--ds=config.settings` fixed it.
+  - **Test file write:** a shell heredoc used to write `test_candidate_pages.py` failed to parse, so nothing was written. I wrote the file with the Write tool instead.
+  - **Never-RED tests:** the 20 normal Phase 2 tests passed on their first run, since they aren't test-first. I said so and offered to deliberately break some to show they catch failures; this wasn't taken up.
+  - **Local database:** the user's local database needed `migrate` before manual testing, because `candidates.0001` hadn't been applied.
+
 ## 2026-11-01 — CLAUDE.md, and Phase 1 (project setup and login-only access) via `/implement`
 
 *(Continues the same session as the plan entry below. Long prompts are condensed to their substance; nothing is added that the prompt did not say.)*

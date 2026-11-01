@@ -12,6 +12,9 @@
   <header class="navbar bg-base-100 shadow-sm px-4">
     <div class="flex-1">
       <a href="{% url 'hiring:workspace' %}" class="text-lg font-semibold">Applicant Tracking System</a>
+      <nav class="ml-6">
+        <a href="{% url 'candidates:list' %}" class="btn btn-sm btn-ghost">Candidates</a>
+      </nav>
     </div>
     <div class="flex items-center gap-3">
       <span class="text-sm">{{ user.get_username }}</span>

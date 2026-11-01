@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}{{ candidate }} · Applicant Tracking System{% endblock %}
+
+{% block content %}
+<div class="card bg-base-100 shadow-sm max-w-2xl">
+  <div class="card-body">
+    <h1 class="card-title">{{ candidate.first_name }} {{ candidate.last_name }}</h1>
+    <dl class="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2">
+      <dt class="font-medium">Email</dt>
+      <dd>{{ candidate.email }}</dd>
+      <dt class="font-medium">Phone</dt>
+      <dd>{{ candidate.phone|default:"—" }}</dd>
+      <dt class="font-medium">Source</dt>
+      <dd>{{ candidate.get_source_display }}{% if candidate.source_detail %} ({{ candidate.source_detail }}){% endif %}</dd>
+      <dt class="font-medium">Notes</dt>
+      <dd class="whitespace-pre-line">{{ candidate.notes|default:"—" }}</dd>
+    </dl>
+    <div class="card-actions mt-2">
+      <a href="{% url 'candidates:edit' candidate.pk %}" class="btn btn-primary btn-sm">Edit</a>
+      <a href="{% url 'candidates:list' %}" class="btn btn-ghost btn-sm">All candidates</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

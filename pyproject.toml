@@ -19,4 +19,4 @@ DJANGO_SETTINGS_MODULE = "config.settings"
 python_files = ["test_*.py"]
 
 [tool.ruff]
-extend-exclude = ["prototypes"]
+extend-exclude = ["prototypes", "*/migrations/*"]
