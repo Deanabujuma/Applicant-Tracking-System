@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block title %}Log in · Applicant Tracking System{% endblock %}
+
+{% block content %}
+<div class="card bg-base-100 shadow-sm max-w-sm mx-auto mt-16">
+  <div class="card-body">
+    <h1 class="card-title">Log in</h1>
+    <form method="post" action="{% url 'login' %}" class="flex flex-col gap-3">
+      {% csrf_token %}
+      {{ form.as_p }}
+      <input type="hidden" name="next" value="{{ next }}">
+      <button type="submit" class="btn btn-primary">Log in</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

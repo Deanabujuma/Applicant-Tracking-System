@@ -29,6 +29,65 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-01 — CLAUDE.md, and Phase 1 (project setup and login-only access) via `/implement`
+
+*(Continues the same session as the plan entry below. Long prompts are condensed to their substance; nothing is added that the prompt did not say.)*
+
+### Prompts
+1. Create a `CLAUDE.md` at the repo root, about 20–30 lines, using the approved PRD and plan as sources of truth. Cover purpose and stack, the three apps and their boundaries, stage rules (permanent Hired, one-step Undo), auth and database protection, the TDD workflow (review tests → RED → GREEN), one approved phase at a time, and maintaining PROMPTS.md. Don't invent commands, structures, or conventions. Don't implement Phase 1. Show the full contents for review.
+2. Approved `CLAUDE.md` as written; keep the field name `stage_changed_at` consistent with the plan. No further changes, and don't begin Phase 1.
+3. `git add CLAUDE.md`
+4. `git commit -m "Add approved CLAUDE.md project instructions"`
+5. `git push`
+6. Begin Phase 1 with `/implement`, using the plan and `CLAUDE.md`. Follow TDD: first propose the Phase 1 tests and explain each, then stop for approval before writing implementation code. No later phases. No extra architectural decisions without explaining them and asking first.
+7. Approved all three test behaviors and decisions 1–7 (`LoginRequiredMiddleware`, a `config/` settings package, the placeholder `/` in `hiring`, per-app `tests/` folders, a pinned saved copy of HTMX, django-tailwind-cli's DaisyUI option, POST logout). Keep the admin-created-account approach with no roles. The login page must stay open to anonymous users. Use the supported DaisyUI setup without Node.js. Start with Test 1 only: write it, run it, show RED, stop.
+8. In Claude's question dialog about the uv workspace, chose **"Standalone project (Recommended)"**.
+9. Approved Test 1 and its RED. Approved the login/logout-only URLs and asked to verify no other auth routes are included. Implement `LoginRequiredMiddleware` and the minimum code for GREEN; show the result, run regression checks, explain the changes, and stop.
+10. Approved Test 1 GREEN. Write Test 2, show RED, explain the failure, and stop. Keep the Ruff cleanup as a separate task before Phase 1 finishes.
+11. Approved Test 2 and its RED, the project-level `templates/` folder, and hiring employees as active, non-staff users (`is_active=True`, `is_staff=False`), with admins keeping their Django admin privileges. Asked for those account properties to be asserted in Test 2. Implement the minimum for GREEN (base template, username display, POST logout form) with Tailwind/DaisyUI and HTMX where appropriate. Show GREEN and run the full suite.
+12. Approved Test 2 GREEN; don't mark Phase 1 complete yet. Agreed to exclude the built `static/css/tailwind.css` from Git if the build steps are documented and reproducible. Write Test 3, show RED, and stop. No commits.
+13. Keep both Test 3 checks as regression tests, and don't add code just to produce a RED. Record in the Phase 1 log that Test 3 passed straight away because of Django's built-in auth, and that the temporary backend experiment showed the tests catch a regression. Then do the remaining Phase 1 work only: verify no sign-up routes or links; verify Tailwind/DaisyUI and HTMX are set up and load; clean up the Ruff issues in generated files; run pytest, Django checks, and Ruff; give run instructions; do browser checks or explain the manual ones. Explain significant changes first. No Phase 2, no commit or push.
+14. Reported the manual browser test results and asked for a review of all Phase 1 acceptance criteria against them and the automated checks. Results: the login page displayed with Tailwind/DaisyUI styling; the administrator logged in and out; a regular active, non-staff account `jdoe` was created and could reach the workspace but was denied Django admin; deactivation was tested in separate regular and InPrivate browser sessions, and `jdoe` lost workspace access; after reactivation `jdoe` could log in again.
+15. Approved Phase 1 as complete (all six acceptance criteria met). Finish one step at a time, starting with this PROMPTS.md update (this prompt). No commit, push, or Phase 2.
+
+### Summary
+- **Outcome:**
+  - **CLAUDE.md:** written (29 lines), approved without changes, committed as `99cf8d3`, and pushed.
+  - **Phase 1 built and approved complete.** Contents:
+    - a standalone uv project (Django 6.1.2, django-tailwind-cli, pytest, pytest-django, Ruff) with its own `uv.lock`
+    - the `config/` settings package and the `candidates`, `openings`, and `hiring` apps, each with a `tests/` folder
+    - `LoginRequiredMiddleware`, and only the `accounts/login/` and `accounts/logout/` routes
+    - a placeholder workspace at `/` in `hiring`
+    - a project-level `templates/` folder with `base.html` (DaisyUI header, username, POST logout form, CSRF header for HTMX) and `registration/login.html`
+    - a pinned HTMX 2.0.4 at `static/js/htmx.min.js`
+    - DaisyUI via `TAILWIND_CLI_USE_DAISY_UI = True`, with no Node.js
+    - the built `static/css/tailwind.css` ignored by Git, with build steps in `README.md`
+  - **TDD results:**
+    - **Test 1** (anonymous visitor redirected to login): RED with `assert 200 == 302`. Adding `LoginRequiredMiddleware` made it GREEN.
+    - **Test 2** (an active, admin-created employee logs in, sees the workspace with their username and a logout form, and logs out): RED with `assert 'jsmith' in 'Hiring workspace'`. The base template, username display, and POST logout form made it GREEN. The test also asserts `is_active=True`, `is_staff=False`, and `is_superuser=False`.
+    - **Test 3** (a deactivated employee can't log in, and deactivating an already logged-in employee ends their access): both checks **passed straight away, with no RED**. Django already provides this: `ModelBackend` and `AuthenticationForm` both reject inactive users, and the backend drops inactive users from existing sessions. No code was added to force a RED; both checks are kept as regression tests.
+    - **Temporary backend experiment:** a throwaway settings file in the scratchpad (no project files changed) switched to `AllowAllUsersModelBackend`. The existing-session test then **failed** (`assert 200 == 302`), proving it catches a regression. The login test still passed, because `AuthenticationForm` has its own inactive-user check.
+  - **Other Phase 1 checks:** tests that `/signup/`, `/register/`, `/accounts/signup/`, and `/accounts/register/` return 404, that the login page has no sign-up or register text, and that the base template links the Tailwind CSS and HTMX. A real-server smoke test got 302 for `/`, 200 for login, 404 for sign-up, and 200 for both the CSS and HTMX files.
+  - **Ruff cleanup:** `ruff check --fix` removed 8 unused imports from Django's starter files, and `ruff format` reformatted 17 files (quote style and line wrapping; no test assertions changed).
+  - **Final checks:** 10 tests passed; Ruff check and format check clean; `manage.py check` clean; `makemigrations --check` reports no changes.
+  - **Manual browser tests (user):** all six acceptance criteria confirmed, including `jdoe` being denied Django admin and deactivation followed by reactivation.
+  - Phase 1 is not yet committed or pushed.
+- **Deviations:**
+  - **Login/logout-only URLs:** I made this decision without asking first (so password-reset and password-change pages weren't exposed, since email is out of scope). I flagged it right away, and the user approved it and asked for the URL list to be checked, which I did.
+  - **"Staff account" wording:** my Test 2 proposal said "a staff account," but the test used a non-staff user on purpose. I flagged the mismatch; the user confirmed non-staff employees and asked for the account properties to be asserted.
+  - **Project-level `templates/` folder:** a small decision I made to get Test 2 running; the user approved it afterward.
+  - **Test 3 has no RED:** the TDD cycle wasn't completed for it. Following the tdd skill (a behavior an existing, tested pattern already settles isn't a TDD candidate) and the user's instruction, the checks became regression tests backed by the backend experiment.
+  - **Ruff cleanup kept separate:** at the user's request it was held back from the Test 1 and Test 2 GREEN steps and done at the end of the phase.
+  - **Built CSS excluded from Git:** the user agreed on condition that the build is documented and reproducible; it's documented in `README.md`.
+  - **Commit message:** the user's literal `git commit -m` command was run as typed, so `99cf8d3` has no Co-Authored-By line.
+- **Sideways:**
+  - **uv workspace:** the first `uv init` and `uv add` found an existing workspace at `C:\Users\deana\pyproject.toml` and added this repo to it, editing that file and the home `uv.lock`. I stopped and asked. After the user chose a standalone project, I removed the one added members line, re-ran `uv lock` in the home folder (only the ATS-added packages were dropped), and ran `uv sync` in the repo to create its own `uv.lock` and `.venv`.
+  - **Test 2's first run** hit `TemplateDoesNotExist: registration/login.html`, which is an error, not a RED. I added a minimal login template and the `templates/` folder, re-ran, and got a real assertion failure.
+  - **Ruff on Django's generated files** failed (8 unused imports, 8 files to reformat) when first checked after Test 1. This was reported and deferred to the agreed cleanup step rather than fixed during GREEN.
+  - **Browser automation:** I didn't automate a browser login, to avoid creating users in the local database without asking. I gave a manual checklist instead; the user's `jdoe` and admin accounts live in the ignored local `db.sqlite3`.
+  - **Shared browser sessions:** according to the user, deactivation testing was at first confused by sharing one browser session between the admin and the employee. Using a regular window and an InPrivate window as separate sessions fixed it and confirmed `jdoe` lost access.
+  - **Earlier commit made outside this session:** between the plan work and the `CLAUDE.md` commit, the user committed the PRD, plan, prototypes, and logs as `20c8c2c`; `git status` showed them already committed when `CLAUDE.md` was staged.
+
 ## 2026-11-01 — Implementation plan from the approved PRD (`/prd-to-plan`)
 
 *(Long prompts are condensed to their substance; nothing is added that the prompt did not say.)*

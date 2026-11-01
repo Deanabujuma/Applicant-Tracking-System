@@ -1,0 +1,29 @@
+{% load static tailwind_cli %}<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Applicant Tracking System{% endblock %}</title>
+  {% tailwind_css %}
+  <script src="{% static 'js/htmx.min.js' %}" defer></script>
+</head>
+<body class="min-h-screen bg-base-200" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+  {% if user.is_authenticated %}
+  <header class="navbar bg-base-100 shadow-sm px-4">
+    <div class="flex-1">
+      <a href="{% url 'hiring:workspace' %}" class="text-lg font-semibold">Applicant Tracking System</a>
+    </div>
+    <div class="flex items-center gap-3">
+      <span class="text-sm">{{ user.get_username }}</span>
+      <form method="post" action="{% url 'logout' %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-sm btn-ghost">Log out</button>
+      </form>
+    </div>
+  </header>
+  {% endif %}
+  <main class="p-4">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

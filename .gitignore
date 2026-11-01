@@ -218,3 +218,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Built by `manage.py tailwind build` (reproducible, not committed)
+static/css/tailwind.css
