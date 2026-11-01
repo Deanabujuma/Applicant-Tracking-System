@@ -1,5 +1,6 @@
-from django.shortcuts import render
-from django.views.decorators.http import require_POST
+from django.contrib import messages
+from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.http import require_http_methods, require_POST
 from django.views.generic import (
     CreateView,
     DetailView,
@@ -90,3 +91,72 @@ def _skills_fragment(request, selected, skill_form, notice=""):
         "openings/_skills_field.html",
         {"field": skills_field, "skill_form": skill_form, "skill_notice": notice},
     )
+
+
+def _confirmation(request, opening, action):
+    """GET only: render the confirmation for ``action``. Never changes data.
+
+    HTMX requests get just the modal fragment (swapped into #modal); ordinary
+    GETs get a full page containing the same confirmation.
+    """
+    template = (
+        "openings/_confirm_modal.html"
+        if request.headers.get("HX-Request")
+        else "openings/confirm_page.html"
+    )
+    return render(request, template, {"opening": opening, "action": action})
+
+
+def _change_status(request, opening, method_name, done_text, already_text):
+    changed = getattr(opening, method_name)()
+    if changed:
+        messages.success(request, done_text.format(opening=opening))
+    else:
+        messages.info(request, already_text.format(opening=opening))
+    return redirect(opening)
+
+
+@require_http_methods(["GET", "POST"])
+def close_opening(request, pk):
+    """GET: confirmation. POST: confirmed close, one-way (never reopens)."""
+    opening = get_object_or_404(JobOpening, pk=pk)
+    if request.method == "GET":
+        return _confirmation(request, opening, "close")
+    return _change_status(
+        request,
+        opening,
+        "close",
+        "Closed opening {opening}. It no longer accepts new applications.",
+        "Opening {opening} is already closed.",
+    )
+
+
+@require_http_methods(["GET", "POST"])
+def reopen_opening(request, pk):
+    """GET: confirmation. POST: confirmed reopen, one-way (never closes)."""
+    opening = get_object_or_404(JobOpening, pk=pk)
+    if request.method == "GET":
+        return _confirmation(request, opening, "reopen")
+    return _change_status(
+        request,
+        opening,
+        "reopen",
+        "Reopened opening {opening}. It accepts new applications again.",
+        "Opening {opening} is already open.",
+    )
+
+
+@require_http_methods(["GET", "POST"])
+def delete_opening(request, pk):
+    """GET -> confirmation (read-only); POST -> permanently delete the opening.
+
+    Deleting removes only the opening and its skill links; Skills are kept.
+    Phase 5 adds ProtectedError handling once applications can exist.
+    """
+    opening = get_object_or_404(JobOpening, pk=pk)
+    if request.method == "GET":
+        return _confirmation(request, opening, "delete")
+    label = str(opening)  # "#N Title"; the pk is gone after delete()
+    opening.delete()
+    messages.success(request, f"Deleted opening {label}.")
+    return redirect("openings:list")

@@ -29,6 +29,62 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-01 — Phase 4 (close, reopen, delete openings) and the opening-specific Skills redesign
+
+*(Continues the same session as the Phase 3 entry below. Long prompts are condensed to their substance; nothing is added that the prompt did not say. The redesign was requested partway through Phase 4 and is committed separately, before the Phase 4 commit.)*
+
+### Prompts
+1. Begin Phase 4 with `/implement`: review the plan, propose up to three test-first behaviors that put safety first, list only the decisions that need approval, and recommend the simplest implementation. Keep closing and deleting clearly separate; an opening with applications must never be deletable; deleting an opening must never delete Skills. Stop for approval.
+2. Approved the three behaviors and decisions A–E (A: Confirm is a normal POST, then a redirect and a flash message; B: a request for the state the opening is already in changes nothing and shows an info message; C: no Application model yet, so `ProtectedError` handling and its test are moved to Phase 5 and written into the plan; D: an ordinary GET gets a full confirmation page; E: the buttons go on the opening detail page only). Five safeguards: GET never changes or deletes anything; don't create Application early, and record the PROTECT requirement and its user-facing error for Phase 5; Cancel must really close the dialog without a request (checked in the browser); close/reopen are one-way and idempotent, with an info message; changing status keeps every other field and the skills, touching only `status` and `updated_at`. Write Test 1 only and show RED.
+3. Approved Test 1 RED and the Phase 5 note. Implement GREEN: `close()`/`reopen()` returning True or False; `save(update_fields=["status", "updated_at"])`; separate URLs; POST redirects to the detail page; success and info messages; GET changes nothing. Stop before Test 2.
+4. Approved Test 1 GREEN and the mechanical fix to its message check. Write Test 2 (the close, reopen, and delete confirmations: an HTMX fragment, action-specific warnings, a POST form with CSRF, a `method="dialog"` Cancel, GET changes nothing, a full page without HTMX) and show RED.
+5. Approved Test 2 RED. Implement GREEN: GET shows the confirmation; changes only by POST with CSRF; a shared `_confirm_modal.html`; separate Confirm and Cancel forms, not nested; a fragment for HTMX and a full page otherwise; Close or Reopen plus Delete buttons on the detail page that load into `#modal`; keep the one-way behavior and info messages. No extra JavaScript or dependencies.
+6. Approved Test 2 GREEN (the real modal and Cancel to be checked in the browser). Write Test 3: two openings share Python and SQL; a confirmed POST deletes A; A and its skill links are gone; both Skills remain; B keeps both skills with every field and timestamp unchanged; redirect to the list with a one-time success message. Show RED.
+7. Approved Test 3 RED. Implement GREEN: GET and POST on `delete_opening`; GET read-only; save the label first; normal model deletion; skills kept; message "Deleted opening #N Title."; redirect to `openings:list`; keep CSRF, login, and confirmation protections; `ProtectedError` stays in Phase 5.
+8. Test 3 GREEN already reviewed and approved. Add the ordinary regression tests: login, deactivated users, 404, messages, the detail buttons, status protected from the edit form, the full-page fallback, read-only GETs, 405 for other methods, and CSRF.
+9. One message with two pasted requests. The first asked for a way to remove skills from just one opening on its Edit page, recommending the existing checkbox-and-save if that already did it. The second revised it: no global Manage Skills page in the normal UI; each opening's Edit page shows only its own skills; Add Skill adds to the current opening only; a Remove control below the skills and Add Skill; removing unlinks from this opening only; handle unsaved changes safely; new openings get skills only when saved; reuse the existing many-to-many. Explain how this affects the PRD, plan, tests, HTMX Add Skill, and uniqueness, and recommend the simplest design. No code. Keep Phase 4 testing separate.
+10. Approved the redesign and its three test-first behaviors. Decisions: (1) remove Manage Skills (views, URLs, templates, link) and register `Skill` in Django Admin; (2) one Remove dropdown and button below Add Skill; (3) a native datalist for suggestions only; (4) keep creating a new Skill immediately when Add is clicked, but don't assign it until Save, and document that Cancel can leave an unused Skill; (5) a separate commit, made only after TDD and browser testing, then Phase 4 finished separately. Keep old PROMPTS entries; mark superseded requirements clearly in the PRD and plan; keep useful tests. Update the PRD and plan first and show the changes.
+11. Approved the PRD and plan with two corrections: say clearly that Add Skill may create a Skill right away but no opening or assignment changes until Save; and replace wording that claimed the redesign was already committed. Then write redesign Test 1 (each Edit page shows only that opening's skills; a new opening shows none; no catalog checkboxes) and show RED.
+12. Approved Test 1 RED. Implement GREEN: hidden inputs instead of checkboxes; a "Skills for this opening" `<ul id="assigned-skills">`; "No skills yet"; keep pending skills through HTMX re-renders and validation errors; no model changes. Explain any older test failures as intended changes or regressions, without deleting tests to make them pass.
+13. Approved Test 1 GREEN and the plan for the two failing older tests. Update the checkbox assertions in the first older test now, leave the duplicate test for the next GREEN, and write Test 2 (case-insensitive reuse of the existing record, no duplicate, pending form only, nothing saved, "already on this opening", other input kept, fragment, datalist, forged IDs rejected) and show RED.
+14. Approved Test 2 RED. Implement GREEN (case-insensitive lookup and reuse, new names still validated, the "already on this opening" message, forged IDs dropped, the datalist, a fragment, nothing saved, blank and length checks kept, the constraint kept) and update the older duplicate test for the reuse behavior.
+15. Approved Test 2 GREEN. Write Test 3 (remove Python from Opening #1's pending form only; the fragment shows only Excel; nothing changes before Save; after Save #1 has only Excel and #2 is fully unchanged; the Python record remains; Cancel changes nothing; the dropdown sits below Add Skill with only pending skills; other input kept; bad IDs can't remove other skills) and show RED. Don't remove Manage Skills yet.
+16. The same message as prompt 15, sent again.
+17. Approved Test 3 RED. Implement GREEN: a login-required, POST-only `/openings/skills/remove/` (`openings:skill_remove`) that changes only the pending selection, ignores bad IDs, returns `_skills_field.html`, and shows the Remove section only when there are skills; Save is the only change and Cancel discards.
+18. Approved Test 3 GREEN. Review the 15 Manage Skills tests one by one, then remove the feature, register `Skill` in Admin, make sure the old URLs don't work, keep the model-level deletion tests, and add regression tests: anonymous and deactivated users, GET on POST-only endpoints, blank and too-long names, invalid forms keeping pending skills, the Remove section hidden when empty, Create assigning only on Save, CSRF, removing the last skill, and other openings unaffected.
+19. Reported manual browser testing as complete and approved: the opening-specific Skills feature (adding, removing, saving, canceling) and the Phase 4 Close, Reopen, and Delete confirmations on several openings all worked. With a deadline tonight: update PROMPTS.md, review the git changes (no database, generated CSS, or unrelated files), run all checks, make the redesign commit and then the Phase 4 commit, push both, check the tree is clean, then begin Phase 5 with `/implement` and stop for approval after proposing up to three behaviors and the decisions (this prompt).
+
+### Summary
+- **Outcome:**
+  - **Phase 4** (`openings`):
+    - `JobOpening.close()`/`reopen()`: one-way and idempotent, saving only `status` and `updated_at`.
+    - GET-and-POST `close_opening`, `reopen_opening`, `delete_opening`: GET only shows a confirmation (an HTMX fragment, or a full `confirm_page.html`); a POST with CSRF makes the change, then redirects with a success or info message. Delete removes the opening and its skill links, never Skills.
+    - A shared `_confirm_modal.html` shown with `<dialog class="modal" open>` (not `modal-open`, so the `method="dialog"` Cancel really hides it).
+    - Detail-page buttons with an `href` fallback.
+    - Tests: 5 test-first (Test 2 runs for close, reopen, and delete) and 58 regression tests.
+    - The Phase 5 note in the plan: the opening delete view must catch `ProtectedError` and tell the employee to close the opening instead.
+  - **Opening-specific Skills redesign** (a second user-requested change, 2026-11-01):
+    - The form shows only the opening's own skills (badges plus hidden inputs).
+    - Add Skill reuses a case-insensitive match or creates a new Skill, adding it to the pending form only, with an "already on this opening" message and a datalist of suggestions.
+    - A new POST-only Remove endpoint and dropdown change only the pending form; Save is the only change.
+    - The Manage Skills page, views, URLs, templates, and link are removed; `Skill` is registered in Django Admin.
+    - The PRD and plan mark stories 75–76 and their criteria as superseded and add stories 77–79 and new criteria.
+    - Tests: 3 test-first and 21 regression tests. In the original 15 Manage Skills tests, 3 data-safety tests were kept (now deleting through the model) and 12 UI cases were replaced by tests that the old URLs return 404, that non-staff employees can't delete in Admin, that `Skill` is registered, and that no page links to Manage Skills. Two Phase 3 tests had their checkbox assertions updated; one was renamed from `…rejects_case_only_duplicate…` to `…reuses_case_only_duplicate…` because that behavior was intentionally changed.
+  - **Results:** 158 tests passing; Ruff, `manage.py check`, and `makemigrations --check` clean; manual browser testing approved by the user.
+- **Deviations:**
+  - Prompt 9 revised its own first request within the same message, from removing skills on the Edit page to a full redesign, withdrawing the Manage Skills feature built and committed in Phase 3.
+  - Prompt 11 corrected two pieces of wording in the PRD and plan.
+  - The user chose the immediate creation of new Skills, knowing Cancel can leave an unused one.
+  - HEAD and OPTIONS on the close, reopen, and delete endpoints return 405; the user was told and didn't change it.
+- **Sideways:**
+  - Phase 4 Test 1's first RED raised a `ValueError` unpacking two queued messages, an error rather than an assertion failure. Fixed by checking the latest message (`[-1]`); the user approved.
+  - A Python heredoc turned `\b` into backspace characters in Test 2 (Ruff PLE2510). Fixed with a scratchpad script, and the RED was run again.
+  - A regression helper created "Python" twice and hit the unique constraint. Fixed with `get_or_create`.
+  - Ruff ISC004 (implicit string concatenation) and two RUF059 warnings (unused unpacked variables) were fixed by changing the tests, not by suppressing the rules.
+  - `git rm` staged the two template deletions before commit time. They were unstaged right away.
+  - Prompt 16 repeated prompt 15. Test 3 had already been written, so nothing was redone; its RED was run again.
+  - Several files changed in both pieces of work, so separating the two commits meant staging versions of `views.py`, `urls.py`, and the plan without their Phase 4 parts.
+
 ## 2026-11-01 — Phase 3 (job openings and skills, plus Manage Skills) via `/implement`
 
 *(Continues the same session as the Phase 2 entry below. The requirement-change prompt (prompt 10 here) is also logged in its own entry, recorded when it was made. Long prompts are condensed to their substance; nothing is added that the prompt did not say.)*

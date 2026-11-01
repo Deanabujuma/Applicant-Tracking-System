@@ -145,6 +145,8 @@ Close and reopen actions on an opening, each behind a server-rendered DaisyUI co
 
 The `Application` model and `Stage` choices in `hiring`, with PROTECT foreign keys, the `applications` reverse relation, and the (candidate, opening) unique constraint. One shared application form used from two entry points: the candidate detail page (choose an opening) and the opening's page (choose a candidate). New applications always start in Applied; there is no stage field. Choices include only Open openings and non-archived candidates, excluding openings the candidate already applied to, and the same rules are validated on submit. Candidate delete is added (for candidates with no applications); both candidate and opening delete are refused with a clear message when applications exist. Independently of the views, the database's PROTECT behavior blocks deleting a candidate or opening that has applications, even when deletion is attempted directly (e.g. calling `.delete()` on the model or a queryset). Closing an opening leaves its applications untouched.
 
+*Carried over from Phase 4 (decision C, 2026-11-01):* Phase 4's opening delete (`/openings/<pk>/delete/`) works on every opening because no applications can exist yet. When this phase adds `Application` with `on_delete=PROTECT`, the opening delete view must catch Django's `ProtectedError` on the confirmed POST, delete nothing, and show the employee an error telling them the opening has applications and should be closed instead — with a test. `openings` still must not import `hiring`; `ProtectedError` is generic Django.
+
 ### Acceptance criteria
 
 - [ ] An application can be added from a candidate's profile and from an opening's page; both produce the same result and start in Applied.

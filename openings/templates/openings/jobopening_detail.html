@@ -23,8 +23,16 @@
     </dl>
     <div class="card-actions mt-2">
       <a href="{% url 'openings:edit' opening.pk %}" class="btn btn-primary btn-sm">Edit</a>
+      {% if opening.status == "open" %}
+      <a href="{% url 'openings:close' opening.pk %}" hx-get="{% url 'openings:close' opening.pk %}" hx-target="#modal" class="btn btn-warning btn-sm">Close opening</a>
+      {% else %}
+      <a href="{% url 'openings:reopen' opening.pk %}" hx-get="{% url 'openings:reopen' opening.pk %}" hx-target="#modal" class="btn btn-success btn-sm">Reopen opening</a>
+      {% endif %}
+      <a href="{% url 'openings:delete' opening.pk %}" hx-get="{% url 'openings:delete' opening.pk %}" hx-target="#modal" class="btn btn-error btn-outline btn-sm">Delete</a>
       <a href="{% url 'openings:list' %}" class="btn btn-ghost btn-sm">All openings</a>
     </div>
   </div>
 </div>
+{# Confirmation dialogs are loaded here by HTMX. #}
+<div id="modal"></div>
 {% endblock %}

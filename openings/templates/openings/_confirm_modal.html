@@ -1,0 +1,38 @@
+{% comment %}
+Confirmation dialog for close / reopen / delete. Shown by HTMX inside #modal, or
+inside confirm_page.html for an ordinary GET. Loading it never changes data:
+only the POST form below does. Cancel is a native <form method="dialog">, which
+the browser handles by closing the dialog, with no request sent.
+The `open` attribute (not the modal-open class) is what makes it visible, so
+closing the dialog really hides it.
+{% endcomment %}
+<dialog class="modal" open aria-labelledby="confirm-title">
+  <div class="modal-box">
+    {% if action == "close" %}
+    <h3 id="confirm-title" class="text-lg font-bold">Close opening {{ opening }}?</h3>
+    <p class="py-2">This opening will stop accepting new applications. Existing applications are not changed, and you can reopen it later.</p>
+    {% elif action == "reopen" %}
+    <h3 id="confirm-title" class="text-lg font-bold">Reopen opening {{ opening }}?</h3>
+    <p class="py-2">This opening will accept new applications again.</p>
+    {% else %}
+    <h3 id="confirm-title" class="text-lg font-bold">Delete opening {{ opening }}?</h3>
+    <p class="py-2">This will permanently delete the opening. Its skills are kept for other openings. This cannot be undone.</p>
+    <p class="text-sm opacity-70">To stop accepting applicants but keep the record, close it instead.</p>
+    {% endif %}
+    <div class="modal-action">
+      <form method="dialog">
+        <button type="submit" class="btn btn-ghost">Cancel</button>
+      </form>
+      <form method="post" action="{% url 'openings:'|add:action opening.pk %}">
+        {% csrf_token %}
+        {% if action == "close" %}
+        <button type="submit" class="btn btn-warning">Close opening</button>
+        {% elif action == "reopen" %}
+        <button type="submit" class="btn btn-success">Reopen opening</button>
+        {% else %}
+        <button type="submit" class="btn btn-error">Delete permanently</button>
+        {% endif %}
+      </form>
+    </div>
+  </div>
+</dialog>

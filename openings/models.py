@@ -47,3 +47,19 @@ class JobOpening(models.Model):
 
     def get_absolute_url(self):
         return reverse("openings:detail", kwargs={"pk": self.pk})
+
+    def close(self):
+        """Close the opening. Returns False (saving nothing) if already Closed."""
+        return self._set_status(OpeningStatus.CLOSED)
+
+    def reopen(self):
+        """Reopen the opening. Returns False (saving nothing) if already Open."""
+        return self._set_status(OpeningStatus.OPEN)
+
+    def _set_status(self, status):
+        if self.status == status:
+            return False
+        self.status = status
+        # Write only these columns so no other field can change.
+        self.save(update_fields=["status", "updated_at"])
+        return True
