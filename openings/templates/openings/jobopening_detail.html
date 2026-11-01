@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}Opening #{{ opening.pk }} {{ opening.title }} · Applicant Tracking System{% endblock %}
+
+{% block content %}
+<div class="card bg-base-100 shadow-sm max-w-2xl">
+  <div class="card-body">
+    <p class="text-sm opacity-70">Opening #{{ opening.pk }}</p>
+    <h1 class="card-title">{{ opening.title }}</h1>
+    <dl class="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2">
+      <dt class="font-medium">Department</dt>
+      <dd>{{ opening.department }}</dd>
+      <dt class="font-medium">Status</dt>
+      <dd><span class="badge {% if opening.status == 'open' %}badge-success{% else %}badge-neutral{% endif %}">{{ opening.get_status_display }}</span></dd>
+      <dt class="font-medium">Location</dt>
+      <dd>{{ opening.location|default:"—" }}</dd>
+      <dt class="font-medium">Skills</dt>
+      <dd>
+        {% for skill in opening.skills.all %}<span class="badge badge-outline mr-1">{{ skill }}</span>{% empty %}—{% endfor %}
+      </dd>
+      <dt class="font-medium">Description</dt>
+      <dd class="whitespace-pre-line">{{ opening.description|default:"—" }}</dd>
+    </dl>
+    <div class="card-actions mt-2">
+      <a href="{% url 'openings:edit' opening.pk %}" class="btn btn-primary btn-sm">Edit</a>
+      <a href="{% url 'openings:list' %}" class="btn btn-ghost btn-sm">All openings</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

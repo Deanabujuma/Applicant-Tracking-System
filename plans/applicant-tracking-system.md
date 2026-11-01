@@ -16,14 +16,14 @@ Durable decisions that apply across all phases:
   - `Candidate`: first name, last name, email, source (required); phone, source detail, notes (optional); archived flag (default false); created/updated timestamps. Case-insensitive unique email enforced by a database constraint.
   - `Source`: `TextChoices` — Job Board, Referral, Company Website, Other. No Source model.
   - `JobOpening`: title, department (plain text) required; description, location optional; status Open (default) / Closed; created/updated timestamps. Titles not unique. M2M to `Skill` (may be empty).
-  - `Skill`: name, case-insensitive unique via a database constraint. No in-app deletion (Django admin only).
+  - `Skill`: name, case-insensitive unique via a database constraint. Employees can permanently delete a skill from the in-app Manage Skills page after confirmation (user-requested change, 2026-11-01); deleting a skill removes only its links to openings, never the openings.
   - `Application`: FK `candidate` and FK `opening`, both `on_delete=PROTECT` with `related_name="applications"`; stage; previous stage (nullable); stage-changed-by (user); stage-changed-at; created/updated timestamps. Database unique constraint on (candidate, opening).
   - `Stage`: `TextChoices` — Applied, Screening, Interview, Final Review, Offer (active); Hired, Rejected, Withdrawn (closed).
   - Application's default manager exposes a custom QuerySet with `active()`.
 - **URLs** (app-namespaced, pk-based because opening titles are not unique):
   - `/accounts/login/`, `/accounts/logout/` — Django auth; no registration route.
   - `/candidates/`, `/candidates/new/`, `/candidates/<pk>/`, `/candidates/<pk>/edit/`, plus POST actions for archive, unarchive, delete under `/candidates/<pk>/…`.
-  - `/openings/`, `/openings/new/`, `/openings/<pk>/edit/`, plus confirm-modal GET + POST for close, reopen, delete under `/openings/<pk>/…`; inline skill creation under `/openings/skills/…`.
+  - `/openings/`, `/openings/new/`, `/openings/<pk>/`, `/openings/<pk>/edit/`, plus confirm-modal GET + POST for close, reopen, delete under `/openings/<pk>/…`; inline skill creation under `/openings/skills/…`; Manage Skills at `/openings/skills/` with a GET confirmation page and confirming POST at `/openings/skills/<pk>/delete/`.
   - `/` — hiring workspace (`hiring` namespace). Filter state in query params: `?opening=<pk|all>&q=&stage=&sort=`.
   - Application create, move-confirm modal (GET), move (POST), and undo (POST) under `/applications/…`.
 - **Authentication / authorization**: Django built-in auth. Every view requires login. Accounts are created only by an administrator in Django admin; deactivating an account (`is_active=False`) revokes access. All employees have identical permissions — no roles or groups.
@@ -72,11 +72,13 @@ The `Candidate` model and `Source` choices with migration, and login-required li
 
 ## Phase 3: Job openings and skills
 
-**User stories**: 18, 19, 20, 21, 22, 23, 24, 25, 26, 27
+**User stories**: 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 75, 76
 
 ### What to build
 
 The `JobOpening` and `Skill` models with migration, and login-required list, create, and edit pages in `openings`. New openings start Open. Lists show title, department, and status so same-titled openings are distinguishable, and each opening also displays its unique opening ID so openings that match on title, department, and status can still be told apart. The opening form selects existing skills and lets staff add a new skill inline via HTMX without losing form input; a case-insensitive duplicate skill name shows a validation message.
+
+*User-requested change (2026-11-01):* a login-required Manage Skills page, linked from the Openings area, lists every skill with the number of openings using it and a Delete action. Delete opens a confirmation page that shows the skill's name and how many openings will lose it; opening that page changes nothing, Cancel changes nothing, and only a confirmed POST permanently deletes the skill. Deleting a skill removes its links to every opening but never deletes or otherwise modifies the openings.
 
 ### Acceptance criteria
 
@@ -87,6 +89,11 @@ The `JobOpening` and `Skill` models with migration, and login-required list, cre
 - [ ] A new skill can be added inline from the opening form via HTMX; the form's other input is preserved.
 - [ ] A skill name differing only in case from an existing one is rejected (form message and database constraint).
 - [ ] All opening pages require login.
+- [ ] A Manage Skills page, linked from the Openings area, lists each skill's name, the number of openings using it, and a Delete action.
+- [ ] Delete shows a confirmation page with the skill's name and how many openings will lose it; loading that page deletes nothing.
+- [ ] Only a confirmed POST deletes the skill; Cancel leaves the skill and all of its opening links unchanged.
+- [ ] Deleting a skill removes its links to every opening; the openings themselves (and their other skills) are not deleted or modified.
+- [ ] Anonymous or deactivated users cannot view Manage Skills or delete a skill.
 
 ---
 

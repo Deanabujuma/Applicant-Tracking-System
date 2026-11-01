@@ -24,5 +24,6 @@ urlpatterns = [
     path("accounts/login/", auth_views.LoginView.as_view(), name="login"),
     path("accounts/logout/", auth_views.LogoutView.as_view(), name="logout"),
     path("candidates/", include("candidates.urls")),
+    path("openings/", include("openings.urls")),
     path("", include("hiring.urls")),
 ]

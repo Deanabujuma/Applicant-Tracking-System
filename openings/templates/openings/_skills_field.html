@@ -1,0 +1,20 @@
+{# Skills checklist + inline "Add skill". Rendered inside the opening form, and returned alone by openings:skill_create (HTMX swaps #skills-field). #}
+<div id="skills-field" class="form-control w-full">
+  <span class="label-text font-medium">{{ field.label }}</span>
+  {{ field }}
+  {% for error in field.errors %}<span class="text-error text-sm">{{ error }}</span>{% endfor %}
+  <div class="flex gap-2 mt-2">
+    <input type="text" name="new_skill_name" value="{{ skill_form.name.value|default_if_none:'' }}"
+           maxlength="100" placeholder="New skill" aria-label="New skill name"
+           class="input input-sm"
+           onkeydown="if (event.key === 'Enter') { event.preventDefault(); this.nextElementSibling.click(); }">
+    <button type="button" class="btn btn-sm"
+            hx-post="{% url 'openings:skill_create' %}"
+            hx-include="#skills-field input"
+            hx-params="new_skill_name,skills"
+            hx-target="#skills-field"
+            hx-swap="outerHTML">Add skill</button>
+  </div>
+  {% for error in skill_form.non_field_errors %}<span class="text-error text-sm">{{ error }}</span>{% endfor %}
+  {% for error in skill_form.name.errors %}<span class="text-error text-sm">{{ error }}</span>{% endfor %}
+</div>

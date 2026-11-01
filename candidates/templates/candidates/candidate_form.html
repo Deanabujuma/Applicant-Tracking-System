@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}New candidate · Applicant Tracking System{% endblock %}
+{% block title %}{% if object %}Edit candidate{% else %}New candidate{% endif %} · Applicant Tracking System{% endblock %}
 
 {% block content %}
 <div class="card bg-base-100 shadow-sm max-w-2xl">

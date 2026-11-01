@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block title %}Delete skill {{ skill.name }} · Applicant Tracking System{% endblock %}
+
+{% block content %}
+<div class="card bg-base-100 shadow-sm max-w-xl">
+  <div class="card-body">
+    <h1 class="card-title">Delete skill</h1>
+    <p>
+      Permanently delete the skill <strong>{{ skill.name }}</strong>?
+      It will be removed from <strong>{{ skill.opening_count }} opening{{ skill.opening_count|pluralize }}</strong>.
+      The openings themselves are not deleted or changed.
+    </p>
+    <p class="text-sm text-error">This can't be undone.</p>
+    <form method="post" action="{% url 'openings:skill_delete' skill.pk %}" class="card-actions mt-2">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-error btn-sm">Delete skill</button>
+      <a href="{% url 'openings:skill_list' %}" class="btn btn-ghost btn-sm">Cancel</a>
+    </form>
+  </div>
+</div>
+{% endblock %}
