@@ -21,8 +21,21 @@
       <dt class="font-medium">Description</dt>
       <dd class="whitespace-pre-line">{{ opening.description|default:"—" }}</dd>
     </dl>
+    <h2 class="text-lg font-semibold mt-4">Applications</h2>
+    {% if applications %}
+    <ul id="applications" class="flex flex-col gap-1">
+      {% for application in applications %}
+      <li><a href="{{ application.candidate.get_absolute_url }}" class="link">{{ application.candidate }}</a> <span class="text-sm opacity-70">({{ application.candidate.email }})</span> <span class="badge badge-outline">{{ application.get_stage_display }}</span></li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p id="applications" class="text-sm opacity-70">No applications yet.</p>
+    {% endif %}
     <div class="card-actions mt-2">
       <a href="{% url 'openings:edit' opening.pk %}" class="btn btn-primary btn-sm">Edit</a>
+      {% if opening.status == "open" %}
+      <a href="{% url 'hiring:application_create' %}?opening={{ opening.pk }}" class="btn btn-sm">Add applicant</a>
+      {% endif %}
       {% if opening.status == "open" %}
       <a href="{% url 'openings:close' opening.pk %}" hx-get="{% url 'openings:close' opening.pk %}" hx-target="#modal" class="btn btn-warning btn-sm">Close opening</a>
       {% else %}

@@ -1,0 +1,22 @@
+{% comment %}
+Candidate delete confirmation, same pattern as the openings confirm modal. Shown by
+HTMX inside #modal, or inside confirm_delete_page.html for an ordinary GET. Loading
+it never changes data: only the POST form below deletes. Cancel is a native
+<form method="dialog"> that closes the dialog without sending a request.
+{% endcomment %}
+<dialog class="modal" open aria-labelledby="confirm-title">
+  <div class="modal-box">
+    <h3 id="confirm-title" class="text-lg font-bold">Delete candidate {{ candidate }}?</h3>
+    <p class="py-2">This will permanently delete {{ candidate }} ({{ candidate.email }}). This cannot be undone.</p>
+    <p class="text-sm opacity-70">Candidates with applications can't be deleted.</p>
+    <div class="modal-action">
+      <form method="dialog">
+        <button type="submit" class="btn btn-ghost">Cancel</button>
+      </form>
+      <form method="post" action="{% url 'candidates:delete' candidate.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-error">Delete permanently</button>
+      </form>
+    </div>
+  </div>
+</dialog>

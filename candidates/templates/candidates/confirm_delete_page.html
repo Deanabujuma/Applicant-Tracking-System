@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+
+{% block title %}Delete candidate {{ candidate }} · Applicant Tracking System{% endblock %}
+
+{% block content %}
+{# Ordinary (non-HTMX) GET: the same confirmation, on its own page. #}
+<p><a href="{{ candidate.get_absolute_url }}" class="link">Back to {{ candidate }}</a></p>
+{% include "candidates/_confirm_delete_modal.html" %}
+{% endblock %}

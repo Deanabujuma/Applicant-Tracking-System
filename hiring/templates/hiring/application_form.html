@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}Add application · Applicant Tracking System{% endblock %}
+
+{% block content %}
+{# Shared by both entry points: the fixed side is shown as text, the other side is chosen. #}
+<div class="card bg-base-100 shadow-sm max-w-2xl">
+  <div class="card-body">
+    <h1 class="card-title">Add application</h1>
+    <p>
+      {% if side == "candidate" %}Candidate: <strong>{{ fixed }}</strong> ({{ fixed.email }})
+      {% else %}Opening: <strong>{{ fixed }}</strong> ({{ fixed.department }}){% endif %}
+    </p>
+    <p class="text-sm opacity-70">New applications start in Applied.</p>
+    {% if form.fixed_problem %}
+    <div role="alert" class="alert alert-warning">{{ form.fixed_problem }}</div>
+    {% endif %}
+    <form method="post" action="{{ request.get_full_path }}" class="flex flex-col gap-3" novalidate>
+      {% csrf_token %}
+      {% if form.non_field_errors %}
+      <div role="alert" class="alert alert-error">{{ form.non_field_errors }}</div>
+      {% endif %}
+      {% for field in form %}
+      <div class="form-control w-full">
+        <span class="label-text font-medium">{{ field.label }} *</span>
+        {{ field }}
+        {% for error in field.errors %}<span class="text-error text-sm">{{ error }}</span>{% endfor %}
+      </div>
+      {% endfor %}
+      <div class="flex gap-2">
+        <button type="submit" class="btn btn-primary">Add application</button>
+        <a href="{{ fixed.get_absolute_url }}" class="btn btn-ghost">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

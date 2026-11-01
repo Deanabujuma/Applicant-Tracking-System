@@ -29,6 +29,56 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-01 — Phase 5 (adding applications and protected deletion) via `/implement`
+
+*(Continues the same session as the Phase 4 entry below. That entry's last prompt (19) also asked to begin Phase 5 and propose up to three test-first behaviors and the decisions, so the prompts here start from its approval. Long prompts are condensed to their substance; nothing is added that the prompt did not say.)*
+
+### Prompts
+1. Approved the three Phase 5 test-first behaviors and decisions 1–4 (1: all Application fields now, with `stage_changed_by` using PROTECT and set, with `stage_changed_at`, when the application is created; 2: one shared form at `/applications/new/?candidate=` or `?opening=`, linked from both detail pages; 3: a candidate delete that follows the Phase 4 confirm pattern, with clear refusal messages; 4: read-only Applications lists on the detail pages). Two clarifications: the candidate or opening fixed by the URL must be checked on the server, so query strings and forged POST data can't get around the rules; and stage, previous_stage, stage_changed_by, and stage_changed_at must never be fields an employee can edit. Write Test 1 (database delete protection: `candidate.delete()`, `opening.delete()`, and both querysets' `.delete()` each raise `ProtectedError`, and everything stays intact) with the minimum model and migration, and show RED.
+2. Approved Test 1 RED. Implement GREEN: switch both foreign keys from CASCADE to PROTECT; make `previous_stage` `null=True, blank=True, default=None`, as the plan says; have Test 1 check `previous_stage is None`; regenerate `hiring/0001_initial.py` instead of adding a second migration; don't reset, delete, or recreate the local database, and confirm the migration state is consistent.
+3. Approved Test 1 GREEN. Write Test 2 (the shared form and its rules: both entry points, the same form, Applied, no forged stage fields, archived candidates and Closed openings refused, duplicates refused, choices limited, the fixed side checked on the server and not overridable by POST, nothing created on failure) and show RED.
+4. Approved Test 2 RED. Implement GREEN: one `ApplicationForm`; the `application_create` view at `/applications/new/`; the two query-string entry points; only the chosen field on the form; limited choices; the whole pair checked on the server; clear errors; Applied with the metadata set by the application; a shared template and links from both detail pages; a redirect with a one-time success message; safe handling of missing, ambiguous, or nonexistent IDs; the database constraint kept as the final safeguard.
+5. Approved Test 2 GREEN. Write Test 3 (deleting from the pages: the opening's confirmed Delete POST is refused with "close it instead"; the new candidate delete is refused with an explanation; a candidate without applications can still be deleted; the candidate confirmation is read-only on GET, needs a confirmed POST, and has Cancel; database PROTECT kept; nothing unrelated deleted) and show RED.
+6. Approved Test 3 RED. Implement GREEN: catch `ProtectedError` in `delete_opening`; the candidate delete at `/candidates/<pk>/delete/` with the Phase 4 confirmation pattern (an HTMX fragment or a full page, a POST to delete, Cancel, CSRF, a Delete button), refusing with an error when applications exist; no nested forms or extra JavaScript; everything unrelated unchanged.
+7. Approved Test 3 GREEN. First check that `delete_opening` calls `opening.delete()` exactly once, inside the try/except (the pasted diff looked duplicated). Then add read-only Applications lists on both detail pages, with links to the related records, stages, and an empty state, kept simple. Add regression tests: the database duplicate constraint, several openings per candidate, closing leaving stages unchanged, application creation (bad or missing query strings, nonexistent IDs, login, deactivated users, CSRF, success messages), candidate delete (login, 404, 405, CSRF, success), errors shown once, links hidden for archived candidates and Closed openings, the lists and their empty states, and no `hiring` imports in `candidates` or `openings`.
+8. Approved the lists and the 39 regression tests. Before committing, inspect `openings/views.py` directly and confirm with a programmatic check that `delete_opening` has exactly one `opening.delete()`, inside the try/except, showing the real source lines and not a diff; remove any duplicate and rerun the affected tests. Keep Phase 5 uncommitted during a short manual browser check.
+9. Reported the manual browser testing as approved: an application for Ana Lopez on Opening #1 Data Analyst was created, appears in the Applications section as Applied, and the success message displayed correctly; the Delete confirmation was opened and Cancel worked. The protected deletion POST itself was *not* tried manually, so record that accurately (the automated tests cover it). Update PROMPTS.md, run all checks, review git status, commit Phase 5, push, confirm the push and a clean tree, report the commit and test count, then begin Phase 6 with `/implement`, propose up to three test-first behaviors and only the decisions that need approval, and stop (this prompt).
+
+### Summary
+- **Outcome:**
+  - **`hiring` models:**
+    - `Stage` (`TextChoices`).
+    - `Application` with string-referenced `candidate` and `opening` foreign keys, both `on_delete=PROTECT` with `related_name="applications"`.
+    - Stage metadata that employees can't edit (`editable=False`): `stage` defaulting to Applied, `previous_stage` nullable with a default of None, `stage_changed_by` (a user foreign key, PROTECT), and `stage_changed_at`.
+    - The unique (candidate, opening) constraint with a shared `DUPLICATE_APPLICATION_MESSAGE`.
+    - A single regenerated migration, `hiring/0001_initial.py`.
+  - **The shared `ApplicationForm`:**
+    - One side is fixed by the URL, with a single field for the other side.
+    - Only eligible choices are offered, but `clean()` checks the whole pair for an archived candidate, a Closed opening, or a duplicate, with clear messages.
+    - `save()` sets Applied, the employee, and the current time, and turns a database `IntegrityError` into the duplicate error.
+  - **The `application_create` view at `/applications/new/`:** 400 for a missing, ambiguous, or non-numeric query string, 404 for nonexistent IDs, and a redirect to the starting page with a success message.
+  - **Detail pages:** "Add application" (hidden for archived candidates), "Add applicant" (hidden for Closed openings), and read-only Applications lists.
+  - **Protected deletes:**
+    - `openings.delete_opening` catches `ProtectedError` and redirects with "…has applications, so it can't be deleted. Close it instead."
+    - The new `candidates.delete_candidate` follows the Phase 4 confirmation pattern (its own modal and full-page templates, a Delete button) and refuses with "…has applications, so they can't be deleted."
+    - Neither app imports `hiring`.
+  - **Tests:**
+    - Test 1 (database delete protection) and Test 3 (the pages refuse the delete), plus Test 2, which runs once for each entry point.
+    - 39 regression tests.
+    - 201 passing in all. Ruff, `check`, `makemigrations --check`, and `migrate --check` clean.
+  - **Manual testing (as reported):** creating an application from a candidate, seeing it as Applied on the opening with the success message, and Cancel in the Delete confirmation all worked. The refused delete POST was not tried in the browser; it is covered by Test 3 and the regression tests.
+- **Deviations:**
+  - The user overrode my proposal to store an empty string for `previous_stage` and required a nullable field with a default of None, as in the plan.
+  - The user added two safety clarifications to the approved decisions (the fixed side checked on the server; the stage fields never editable).
+  - The user asked for a programmatic check of `delete_opening` because a pasted diff looked like it had two delete calls.
+- **Sideways:**
+  - Test 1's RED needed a temporary `CASCADE` on both foreign keys so it would fail on an assertion. The code comment said so, and GREEN replaced it with PROTECT.
+  - Making `previous_stage` nullable after the first `0001` was already applied locally meant the database column would no longer match. The table was empty (0 applications), so I ran `migrate hiring zero`, which dropped only that new table, regenerated `0001`, and applied it again. The column was confirmed as NULL, and the existing candidates, openings, and skills were untouched. The database file was not reset.
+  - My first `ApplicationForm` draft used two lambdas with `# noqa: E731`, which breaks the no-`noqa` rule. They were replaced with module-level functions before any test run.
+  - Test 3's RED needed `client.raise_request_exception = False`, so the unhandled `ProtectedError` came back as the 500 page an employee would see (an assertion failure) instead of crashing the test.
+  - The apparently duplicated `opening.delete()` was only my edit script's search-and-replace text (old, then new). An `ast` check showed exactly one call, inside the try/except, so nothing was removed.
+  - Ruff ISC004 in the regression tests was fixed by moving the message into a variable.
+
 ## 2026-11-01 — Phase 4 (close, reopen, delete openings) and the opening-specific Skills redesign
 
 *(Continues the same session as the Phase 3 entry below. Long prompts are condensed to their substance; nothing is added that the prompt did not say. The redesign was requested partway through Phase 4 and is committed separately, before the Phase 4 commit.)*

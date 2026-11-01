@@ -1,4 +1,5 @@
 from django.contrib import messages
+from django.db.models import ProtectedError
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_http_methods, require_POST
 from django.views.generic import (
@@ -26,6 +27,11 @@ class JobOpeningCreateView(CreateView):
 class JobOpeningDetailView(DetailView):
     model = JobOpening
     context_object_name = "opening"
+
+    def get_context_data(self, **kwargs):
+        # Through the reverse relation only: openings never imports hiring.
+        kwargs["applications"] = self.object.applications.select_related("candidate")
+        return super().get_context_data(**kwargs)
 
 
 class JobOpeningUpdateView(UpdateView):
@@ -151,12 +157,22 @@ def delete_opening(request, pk):
     """GET -> confirmation (read-only); POST -> permanently delete the opening.
 
     Deleting removes only the opening and its skill links; Skills are kept.
-    Phase 5 adds ProtectedError handling once applications can exist.
+    An opening with applications is protected (PROTECT foreign key): nothing is
+    deleted, and the employee is told to close it instead. This catches Django's
+    generic ProtectedError, so openings never imports hiring.
     """
     opening = get_object_or_404(JobOpening, pk=pk)
     if request.method == "GET":
         return _confirmation(request, opening, "delete")
     label = str(opening)  # "#N Title"; the pk is gone after delete()
-    opening.delete()
+    try:
+        opening.delete()
+    except ProtectedError:
+        messages.error(
+            request,
+            f"Opening {label} has applications, so it can't be deleted. "
+            "Close it instead.",
+        )
+        return redirect(opening)
     messages.success(request, f"Deleted opening {label}.")
     return redirect("openings:list")

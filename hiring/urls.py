@@ -6,4 +6,5 @@ app_name = "hiring"
 
 urlpatterns = [
     path("", views.workspace, name="workspace"),
+    path("applications/new/", views.application_create, name="application_create"),
 ]

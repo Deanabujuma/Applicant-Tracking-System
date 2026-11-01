@@ -16,10 +16,26 @@
       <dt class="font-medium">Notes</dt>
       <dd class="whitespace-pre-line">{{ candidate.notes|default:"—" }}</dd>
     </dl>
+    <h2 class="text-lg font-semibold mt-4">Applications</h2>
+    {% if applications %}
+    <ul id="applications" class="flex flex-col gap-1">
+      {% for application in applications %}
+      <li><a href="{{ application.opening.get_absolute_url }}" class="link">{{ application.opening }}</a> <span class="text-sm opacity-70">({{ application.opening.department }})</span> <span class="badge badge-outline">{{ application.get_stage_display }}</span></li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p id="applications" class="text-sm opacity-70">No applications yet.</p>
+    {% endif %}
     <div class="card-actions mt-2">
       <a href="{% url 'candidates:edit' candidate.pk %}" class="btn btn-primary btn-sm">Edit</a>
+      {% if not candidate.is_archived %}
+      <a href="{% url 'hiring:application_create' %}?candidate={{ candidate.pk }}" class="btn btn-sm">Add application</a>
+      {% endif %}
+      <a href="{% url 'candidates:delete' candidate.pk %}" hx-get="{% url 'candidates:delete' candidate.pk %}" hx-target="#modal" class="btn btn-error btn-outline btn-sm">Delete</a>
       <a href="{% url 'candidates:list' %}" class="btn btn-ghost btn-sm">All candidates</a>
     </div>
   </div>
 </div>
+{# The delete confirmation dialog is loaded here by HTMX. #}
+<div id="modal"></div>
 {% endblock %}
