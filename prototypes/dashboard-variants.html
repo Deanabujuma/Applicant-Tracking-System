@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="en" data-theme="corporate">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hiring Dashboard Variants</title>
+<!-- THROWAWAY UI PROTOTYPE: not production code. Compares three hiring-dashboard directions. -->
+<link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com/3.4.5"></script>
+</head>
+<body class="bg-base-200 min-h-screen pb-24">
+
+<div id="app"></div>
+
+<!-- Confirm dialog (shared) -->
+<dialog id="confirm" class="modal">
+  <div class="modal-box">
+    <h3 class="font-bold text-lg" id="confirm-title"></h3>
+    <p class="py-3" id="confirm-msg"></p>
+    <div id="confirm-warn"></div>
+    <div class="modal-action">
+      <button class="btn" id="confirm-cancel">Cancel</button>
+      <button class="btn btn-primary" id="confirm-ok">Confirm</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- Stage picker (used by Kanban "More…") -->
+<dialog id="picker" class="modal">
+  <div class="modal-box">
+    <h3 class="font-bold text-lg" id="picker-title"></h3>
+    <div class="flex flex-wrap gap-2 py-4" id="picker-body"></div>
+    <div class="modal-action"><button class="btn" onclick="picker.close()">Close</button></div>
+  </div>
+</dialog>
+
+<div class="toast toast-end z-40" id="toasts"></div>
+
+<!-- Variant switcher: deliberately separate from the designs -->
+<div class="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-neutral text-neutral-content rounded-full shadow-xl px-3 py-2 flex items-center gap-3 text-sm max-w-[95vw]">
+  <button class="btn btn-xs btn-circle" id="prev" title="Previous (←)">‹</button>
+  <span class="font-semibold whitespace-nowrap" id="variant-label"></span>
+  <button class="btn btn-xs btn-circle" id="next" title="Next (→)">›</button>
+  <span class="opacity-40">|</span>
+  <span class="truncate opacity-80" id="last-action"></span>
+</div>
+
+<script>
+// ===== Rules (same as prototypes/stage-transitions.html) =====
+const Rules = (() => {
+  const ACTIVE = ["Applied", "Screening", "Interview", "Final Review", "Offer"];
+  const CLOSED = ["Hired", "Rejected", "Withdrawn"];
+  const ALL = [...ACTIVE, ...CLOSED];
+  function whyNot(app, to) {
+    const from = app.stage;
+    if (from === to) return `Already in ${to}.`;
+    if (from === "Hired") return "Hired is permanent.";
+    if (from === "Rejected" || from === "Withdrawn") return `This application is ${from}. Only Undo can change it.`;
+    if (to === "Hired" && from !== "Offer") return "Hired can only be reached from Offer.";
+    if (CLOSED.includes(to)) return null;
+    if (ACTIVE.indexOf(to) < ACTIVE.indexOf(from)) return "Backward moves only through Undo.";
+    return null;
+  }
+  const allowed = app => ALL.filter(s => !whyNot(app, s));
+  const move = (app, to) => ({ ...app, stage: to, previousStage: app.stage });
+  const undoBlocker = app => app.stage === "Hired" ? "Hired is permanent." : !app.previousStage ? "Nothing to undo." : null;
+  const undo = app => ({ ...app, stage: app.previousStage, previousStage: null });
+  return { ACTIVE, CLOSED, ALL, whyNot, allowed, move, undoBlocker, undo };
+})();
+
+// ===== Sample data (in memory only) =====
+const openings = [
+  { id: 1, title: "Junior Data Analyst", dept: "Analytics", status: "Open" },
+  { id: 2, title: "Help Desk Technician", dept: "IT", status: "Open" },
+  { id: 3, title: "Marketing Coordinator", dept: "Marketing", status: "Closed" },
+  { id: 4, title: "Payroll Specialist", dept: "Finance", status: "Closed" },
+  { id: 5, title: "Software Developer I", dept: "Engineering", status: "Open" },
+];
+const raw = [
+  ["Maria Lopez", 1, "Interview", "Job Board", "LinkedIn", 2],
+  ["James Carter", 1, "Applied", "Company Website", "", 0],
+  ["Aisha Khan", 1, "Screening", "Referral", "Referred by T. Nguyen", 3],
+  ["Daniel Reyes", 1, "Final Review", "Job Board", "Indeed", 1],
+  ["Emily Chen", 1, "Offer", "Referral", "Referred by R. Patel", 1],
+  ["Noah Williams", 1, "Rejected", "Job Board", "Indeed", 9],
+  ["Sofia Martinez", 1, "Applied", "Job Board", "LinkedIn", 0],
+  ["Liam Johnson", 2, "Applied", "Company Website", "", 1],
+  ["Olivia Brown", 2, "Screening", "Job Board", "Handshake", 2],
+  ["Ethan Davis", 2, "Interview", "Other", "Career fair", 4],
+  ["Grace Kim", 2, "Withdrawn", "Job Board", "Indeed", 6],
+  ["Lucas Garcia", 2, "Applied", "Referral", "Referred by M. Ortiz", 0],
+  ["Chloe Wilson", 3, "Interview", "Company Website", "", 5],
+  ["Mason Lee", 3, "Final Review", "Referral", "Referred by J. Smith", 3],
+  ["Ava Thompson", 3, "Screening", "Job Board", "LinkedIn", 8],
+  ["Henry Moore", 3, "Rejected", "Job Board", "Indeed", 12],
+  ["Zoe Anderson", 3, "Rejected", "Other", "Walk-in", 14],
+  ["Isaac Taylor", 4, "Hired", "Referral", "Referred by K. Brooks", 20],
+  ["Lily Thomas", 4, "Rejected", "Job Board", "Indeed", 25],
+  ["Owen Jackson", 4, "Withdrawn", "Company Website", "", 22],
+  ["Hannah White", 5, "Applied", "Job Board", "LinkedIn", 0],
+  ["Caleb Harris", 5, "Screening", "Company Website", "", 1],
+  ["Ella Martin", 5, "Interview", "Referral", "Referred by D. Wu", 2],
+  ["Jack Robinson", 5, "Interview", "Job Board", "Indeed", 3],
+  ["Mia Clark", 5, "Offer", "Job Board", "LinkedIn", 1],
+  ["Ryan Lewis", 5, "Applied", "Other", "Meetup", 0],
+];
+let apps = raw.map(([candidate, opening, stage, source, detail, updated], i) => ({
+  id: i + 1, candidate, opening, stage, source, detail, updated, previousStage: null,
+  email: candidate.toLowerCase().replace(" ", ".") + "@example.com",
+}));
+
+// ===== UI state =====
+const ui = {
+  variant: 0,
+  a: { opening: "all" },
+  b: { q: "", opening: "all", stage: "all", finished: false, sort: "updated", dir: 1 },
+  c: { opening: 1, stage: "all", sel: null },
+};
+try { ui.variant = Number(localStorage.getItem("ats-variant")) || 0; } catch (e) {}
+let lastAction = "No changes yet.";
+
+// ===== Helpers =====
+const byId = id => apps.find(a => a.id === id);
+const opening = id => openings.find(o => o.id === id);
+const isActive = a => Rules.ACTIVE.includes(a.stage);
+const activeCount = oid => apps.filter(a => a.opening === oid && isActive(a)).length;
+const closedWithActive = () => openings.filter(o => o.status === "Closed" && activeCount(o.id) > 0);
+const ago = d => d === 0 ? "today" : d === 1 ? "1 day ago" : `${d} days ago`;
+const nextStage = a => a.stage === "Offer" ? "Hired" : isActive(a) ? Rules.ACTIVE[Rules.ACTIVE.indexOf(a.stage) + 1] : null;
+function stageBadge(s) {
+  const cls = s === "Hired" ? "badge-success" : s === "Rejected" ? "badge-error" : s === "Withdrawn" ? "badge-neutral" : "badge-info badge-outline";
+  return `<span class="badge ${cls} badge-sm whitespace-nowrap">${s}${s === "Hired" ? " 🔒" : ""}</span>`;
+}
+const closedFlag = o => o.status === "Closed" ? `<span class="badge badge-warning badge-sm">Closed opening</span>` : "";
+const openingBadge = o => o.status === "Open" ? `<span class="badge badge-success badge-outline badge-sm">Open</span>` : `<span class="badge badge-warning badge-sm">Closed</span>`;
+const openingOptions = sel => `<option value="all">All openings</option>` + openings.map(o => `<option value="${o.id}" ${String(o.id) === String(sel) ? "selected" : ""}>${o.title}${o.status === "Closed" ? " (Closed)" : ""}</option>`).join("");
+const undoBtn = (a, size = "btn-xs") => Rules.undoBlocker(a) ? "" : `<button class="btn ${size} btn-warning btn-outline" data-act="undo" data-id="${a.id}" title="Back to ${a.previousStage}">↶ Undo (to ${a.previousStage})</button>`;
+function closedBanner() {
+  const list = closedWithActive();
+  if (!list.length) return "";
+  return `<div role="alert" class="alert alert-warning mb-4 text-sm"><span>⚠ Closed openings with applicants still in progress: ${list.map(o => `<strong>${o.title}</strong> (${activeCount(o.id)} active)`).join(", ")}. No new applications are accepted, but these applicants still need decisions.</span></div>`;
+}
+
+// ===== Actions (shared by all variants) =====
+let onConfirm = null;
+const confirmDlg = document.getElementById("confirm");
+const picker = document.getElementById("picker");
+
+function openConfirm({ title, msg, warn, okClass }, ok) {
+  document.getElementById("confirm-title").textContent = title;
+  document.getElementById("confirm-msg").textContent = msg;
+  document.getElementById("confirm-warn").innerHTML = warn || "";
+  document.getElementById("confirm-ok").className = "btn " + (okClass || "btn-primary");
+  onConfirm = ok;
+  confirmDlg.showModal();
+}
+document.getElementById("confirm-ok").onclick = () => { confirmDlg.close(); const f = onConfirm; onConfirm = null; f && f(); };
+const cancelConfirm = () => { if (!onConfirm) return; onConfirm = null; confirmDlg.close(); lastAction = "Cancelled — nothing changed."; render(); };
+document.getElementById("confirm-cancel").onclick = cancelConfirm;
+confirmDlg.addEventListener("cancel", e => { e.preventDefault(); cancelConfirm(); });
+
+function moveText(a, to) {
+  const from = a.stage, name = a.candidate;
+  if (to === "Hired") return { title: "Mark as Hired?", msg: `Mark ${name} as Hired for ${opening(a.opening).title}?`, okClass: "btn-success",
+    warn: `<div class="alert alert-error text-sm"><span>🔒 This is permanent and cannot be undone.</span></div>` };
+  if (to === "Rejected" || to === "Withdrawn") return { title: `Mark as ${to}?`, msg: `Mark ${name}'s application as ${to}? (currently ${from})`, okClass: "btn-error",
+    warn: `<div class="alert text-sm"><span>You can undo this once, right afterward.</span></div>` };
+  const skip = Rules.ACTIVE.indexOf(to) - Rules.ACTIVE.indexOf(from) > 1;
+  return skip
+    ? { title: "Skip ahead?", msg: `Move ${name} from ${from} directly to ${to}? The stages in between will be skipped.` }
+    : { title: "Move forward?", msg: `Ready to move ${name} from ${from} to ${to}?` };
+}
+
+function askMove(id, to) {
+  const a = byId(id);
+  const why = Rules.whyNot(a, to);
+  if (why) { toast(`Blocked: ${why}`, null, "alert-error"); render(); return; }
+  openConfirm(moveText(a, to), () => {
+    const from = a.stage;
+    Object.assign(a, Rules.move(a, to), { updated: 0 });
+    lastAction = `${a.candidate}: ${from} → ${to}`;
+    toast(to === "Hired" ? `${a.candidate} hired. This is permanent.` : `${a.candidate} moved to ${to}.`, to === "Hired" ? null : a.id, to === "Hired" ? "alert-success" : "alert-info");
+    render();
+  });
+}
+
+function doUndo(id) {
+  const a = byId(id);
+  if (Rules.undoBlocker(a)) { toast(`Can't undo: ${Rules.undoBlocker(a)}`, null, "alert-error"); return; }
+  const from = a.stage;
+  Object.assign(a, Rules.undo(a), { updated: 0 });
+  lastAction = `Undo — ${a.candidate}: ${from} → ${a.stage}`;
+  toast(`Undone. ${a.candidate} is back in ${a.stage}.`, null, "alert-info");
+  render();
+}
+
+function toggleOpening(oid) {
+  const o = opening(oid), closing = o.status === "Open", n = activeCount(oid);
+  openConfirm(closing
+    ? { title: "Close this opening?", msg: `Stop accepting new applications for ${o.title}? The ${n} applicant(s) already in progress are not affected and can keep moving through the stages.`, okClass: "btn-warning" }
+    : { title: "Reopen this opening?", msg: `Start accepting new applications for ${o.title} again?` },
+    () => { o.status = closing ? "Closed" : "Open"; lastAction = `${o.title} ${closing ? "closed" : "reopened"}`; render(); });
+}
+
+function openPicker(id) {
+  const a = byId(id);
+  document.getElementById("picker-title").textContent = `Move ${a.candidate} (now in ${a.stage}) to…`;
+  document.getElementById("picker-body").innerHTML = Rules.allowed(a).map(s => {
+    const cls = s === "Hired" ? "btn-success" : s === "Rejected" || s === "Withdrawn" ? "btn-error btn-outline" : "btn-outline";
+    return `<button class="btn btn-sm ${cls}" data-act="move" data-id="${a.id}" data-to="${s}">${s}</button>`;
+  }).join("") || `<p class="opacity-60">No moves available.</p>`;
+  picker.showModal();
+}
+
+function toast(msg, undoId, tone) {
+  const el = document.createElement("div");
+  el.className = `alert ${tone || "alert-info"} shadow-lg text-sm`;
+  el.innerHTML = `<span>${msg}</span>` + (undoId ? `<button class="btn btn-xs" data-act="undo" data-id="${undoId}">↶ Undo</button>` : "");
+  document.getElementById("toasts").append(el);
+  setTimeout(() => el.remove(), 6000);
+}
+
+// ===== Variant A: Kanban board =====
+function renderA() {
+  const f = ui.a.opening;
+  const list = apps.filter(a => f === "all" || a.opening === Number(f));
+  const col = s => {
+    const items = list.filter(a => a.stage === s);
+    const tint = s === "Hired" ? "bg-success/10" : s === "Rejected" ? "bg-error/10" : s === "Withdrawn" ? "bg-base-300" : "bg-base-100/60";
+    return `<div class="w-64 shrink-0 ${tint} rounded-box p-2 flex flex-col gap-2 border border-base-300">
+      <div class="flex justify-between items-center px-1 py-1"><span class="font-semibold text-sm">${s}</span><span class="badge badge-sm">${items.length}</span></div>
+      ${items.map(cardA).join("") || `<div class="text-xs opacity-50 text-center py-6">No applicants</div>`}
+    </div>`;
+  };
+  const sel = f === "all" ? null : opening(Number(f));
+  return `
+  <div class="navbar bg-base-100 shadow-sm px-4"><div class="flex-1 font-bold text-lg">ATS · Hiring Board</div>
+    <div class="flex items-center gap-2">
+      <select class="select select-bordered select-sm" data-change="a-opening">${openingOptions(f)}</select>
+      ${sel ? `<button class="btn btn-sm btn-ghost" data-act="toggle" data-id="${sel.id}">${sel.status === "Open" ? "Close opening" : "Reopen opening"}</button>` : ""}
+    </div></div>
+  <div class="p-4">
+    ${closedBanner()}
+    <div class="flex gap-3 overflow-x-auto pb-4">${Rules.ACTIVE.map(col).join("")}<div class="divider divider-horizontal mx-0"></div>${Rules.CLOSED.map(col).join("")}</div>
+  </div>`;
+}
+function cardA(a) {
+  const o = opening(a.opening), nxt = nextStage(a);
+  return `<div class="card card-compact bg-base-100 shadow-sm"><div class="card-body gap-1">
+    <div class="font-medium">${a.candidate}</div>
+    <div class="text-xs opacity-70">${o.title} · ${ago(a.updated)}</div>
+    <div class="flex flex-wrap gap-1">${closedFlag(o)}<span class="badge badge-ghost badge-sm">${a.source}</span></div>
+    <div class="flex flex-wrap gap-1 mt-1">
+      ${nxt ? `<button class="btn btn-xs ${nxt === "Hired" ? "btn-success" : "btn-primary"}" data-act="move" data-id="${a.id}" data-to="${nxt}">→ ${nxt}</button>` : ""}
+      ${isActive(a) ? `<button class="btn btn-xs" data-act="pick" data-id="${a.id}">More…</button>` : ""}
+      ${undoBtn(a)}
+      ${a.stage === "Hired" ? `<span class="text-xs opacity-60">🔒 Permanent</span>` : ""}
+    </div></div></div>`;
+}
+
+// ===== Variant B: Table view =====
+function renderB() {
+  const s = ui.b;
+  const keys = { candidate: a => a.candidate, opening: a => opening(a.opening).title, stage: a => Rules.ALL.indexOf(a.stage), source: a => a.source, updated: a => a.updated };
+  const rows = apps.filter(a => (s.finished || isActive(a)) && (s.opening === "all" || a.opening === Number(s.opening))
+      && (s.stage === "all" || a.stage === s.stage) && (!s.q || a.candidate.toLowerCase().includes(s.q.toLowerCase())))
+    .sort((x, y) => { const kx = keys[s.sort](x), ky = keys[s.sort](y); return (kx > ky ? 1 : kx < ky ? -1 : 0) * s.dir; });
+  const th = (k, label) => `<th><button class="flex items-center gap-1 font-semibold" data-act="b-sort" data-to="${k}">${label}${s.sort === k ? (s.dir === 1 ? " ▲" : " ▼") : ""}</button></th>`;
+  const stageCell = a => {
+    const opts = Rules.allowed(a);
+    if (!opts.length) return stageBadge(a.stage);
+    return `<select class="select select-bordered select-xs" data-change="row-stage" data-id="${a.id}">
+      <option value="" selected>${a.stage}</option>
+      <optgroup label="Move to">${opts.map(o => `<option value="${o}">${o === "Hired" ? "Hired 🔒" : o}</option>`).join("")}</optgroup></select>`;
+  };
+  return `
+  <div class="navbar bg-base-100 shadow-sm px-4"><div class="flex-1 font-bold text-lg">ATS</div>
+    <div role="tablist" class="tabs tabs-boxed tabs-sm"><a role="tab" class="tab tab-active">Applications</a><a role="tab" class="tab">Candidates</a><a role="tab" class="tab">Openings</a></div></div>
+  <div class="p-4 max-w-6xl mx-auto">
+    ${closedBanner()}
+    <div class="bg-base-100 rounded-box shadow-sm p-4">
+      <div class="flex flex-wrap gap-2 items-center mb-3">
+        <input id="b-q" class="input input-bordered input-sm w-48" placeholder="Search candidate…" value="${s.q}" data-change="b-q">
+        <select class="select select-bordered select-sm" data-change="b-opening">${openingOptions(s.opening)}</select>
+        <select class="select select-bordered select-sm" data-change="b-stage"><option value="all">All stages</option>${Rules.ALL.map(x => `<option ${s.stage === x ? "selected" : ""}>${x}</option>`).join("")}</select>
+        <label class="label cursor-pointer gap-2"><input type="checkbox" class="toggle toggle-sm" data-change="b-finished" ${s.finished ? "checked" : ""}><span class="label-text text-sm">Include Hired / Rejected / Withdrawn</span></label>
+        <span class="ml-auto text-sm opacity-60">${rows.length} of ${apps.length} applications</span>
+      </div>
+      <div class="overflow-x-auto"><table class="table table-sm table-zebra">
+        <thead><tr>${th("candidate", "Candidate")}${th("opening", "Opening")}${th("stage", "Stage")}${th("source", "Source")}${th("updated", "Updated")}<th></th></tr></thead>
+        <tbody>${rows.map(a => { const o = opening(a.opening); return `<tr>
+          <td class="font-medium">${a.candidate}</td>
+          <td><div class="flex items-center gap-1 flex-wrap">${o.title} ${closedFlag(o)}</div></td>
+          <td>${stageCell(a)}</td>
+          <td class="text-xs">${a.source}${a.detail ? `<div class="opacity-60">${a.detail}</div>` : ""}</td>
+          <td class="text-xs opacity-70 whitespace-nowrap">${ago(a.updated)}</td>
+          <td>${undoBtn(a)}</td></tr>`; }).join("") || `<tr><td colspan="6" class="text-center opacity-60 py-6">No applications match.</td></tr>`}
+        </tbody></table></div>
+    </div>
+  </div>`;
+}
+
+// ===== Variant C: Openings-first workspace =====
+function renderC() {
+  const s = ui.c, o = opening(s.opening);
+  const mine = apps.filter(a => a.opening === o.id);
+  const list = mine.filter(a => s.stage === "all" || a.stage === s.stage);
+  const sel = s.sel && byId(s.sel) && byId(s.sel).opening === o.id ? byId(s.sel) : null;
+
+  const side = openings.map(x => {
+    const n = activeCount(x.id), warn = x.status === "Closed" && n > 0;
+    return `<li><a class="${x.id === o.id ? "active" : ""} flex justify-between" data-act="c-open" data-id="${x.id}">
+      <span class="flex flex-col"><span>${x.title}</span><span class="text-xs opacity-60">${x.dept} · ${x.status}</span></span>
+      <span class="flex items-center gap-1">${warn ? `<span title="Closed but still has active applicants">⚠</span>` : ""}<span class="badge badge-sm">${n}</span></span></a></li>`;
+  }).join("");
+
+  const counts = ["all", ...Rules.ALL].map(st => {
+    const n = st === "all" ? mine.length : mine.filter(a => a.stage === st).length;
+    return `<button class="btn btn-sm ${s.stage === st ? "btn-primary" : "btn-ghost"} flex-col h-auto py-2 gap-0" data-act="c-stage" data-to="${st}">
+      <span class="text-lg font-bold leading-none">${n}</span><span class="text-[11px] font-normal">${st === "all" ? "All" : st}</span></button>`;
+  }).join("");
+
+  const rows = list.map(a => `<li><a class="${sel && sel.id === a.id ? "active" : ""} flex justify-between" data-act="c-sel" data-id="${a.id}">
+      <span>${a.candidate}<span class="block text-xs opacity-60">${a.source} · ${ago(a.updated)}</span></span>${stageBadge(a.stage)}</a></li>`).join("")
+    || `<li class="opacity-60 p-4 text-sm">No applicants in this stage.</li>`;
+
+  let detail = `<div class="opacity-60 text-sm p-6 text-center">Select an applicant to see details and move their stage.</div>`;
+  if (sel) {
+    const allowed = Rules.allowed(sel), nxt = nextStage(sel);
+    const fwd = allowed.filter(x => Rules.ACTIVE.includes(x) || x === "Hired");
+    const end = allowed.filter(x => x === "Rejected" || x === "Withdrawn");
+    detail = `<div class="p-4 flex flex-col gap-3">
+      <div><div class="text-xl font-bold">${sel.candidate}</div><div class="text-sm opacity-70">${sel.email}</div></div>
+      <div class="text-sm"><span class="opacity-60">Source:</span> ${sel.source}${sel.detail ? ` — ${sel.detail}` : ""}</div>
+      <div class="flex items-center gap-2"><span class="text-sm opacity-60">Stage:</span>${stageBadge(sel.stage)}
+        ${!Rules.undoBlocker(sel) ? `<span class="text-xs opacity-60">(came from ${sel.previousStage})</span>` : ""}</div>
+      <ul class="steps steps-vertical text-xs">${Rules.ACTIVE.map(st => `<li class="step ${Rules.ACTIVE.indexOf(st) <= Rules.ACTIVE.indexOf(sel.stage) || Rules.CLOSED.includes(sel.stage) && st === "Applied" ? "step-primary" : ""}">${st}</li>`).join("")}</ul>
+      ${sel.stage === "Hired" ? `<div class="alert alert-success text-sm"><span>🔒 Hired — this decision is permanent.</span></div>` : ""}
+      ${fwd.length ? `<div><div class="text-xs font-semibold uppercase opacity-60 mb-1">Move forward</div><div class="flex flex-wrap gap-2">
+        ${fwd.map(x => `<button class="btn btn-sm ${x === "Hired" ? "btn-success" : x === nxt ? "btn-primary" : "btn-outline"}" data-act="move" data-id="${sel.id}" data-to="${x}">${x === nxt ? "→ " + x : "Skip to " + x}</button>`).join("")}</div></div>` : ""}
+      ${end.length ? `<div><div class="text-xs font-semibold uppercase opacity-60 mb-1">End application</div><div class="flex flex-wrap gap-2">
+        ${end.map(x => `<button class="btn btn-sm btn-error btn-outline" data-act="move" data-id="${sel.id}" data-to="${x}">${x === "Rejected" ? "Reject" : "Withdraw"}</button>`).join("")}</div></div>` : ""}
+      ${undoBtn(sel, "btn-sm")}
+    </div>`;
+  }
+
+  return `
+  <div class="lg:grid lg:grid-cols-12 min-h-screen">
+    <aside class="lg:col-span-3 bg-base-100 border-r border-base-300 p-3">
+      <div class="font-bold text-lg px-3 py-2">ATS · Openings</div>
+      <ul class="menu menu-sm">${side}</ul>
+    </aside>
+    <section class="lg:col-span-9 p-4">
+      <div class="flex flex-wrap items-center gap-3 mb-3">
+        <h1 class="text-2xl font-bold">${o.title}</h1>${openingBadge(o)}
+        <button class="btn btn-sm btn-ghost ml-auto" data-act="toggle" data-id="${o.id}">${o.status === "Open" ? "Close opening" : "Reopen opening"}</button>
+      </div>
+      ${o.status === "Closed" && activeCount(o.id) ? `<div class="alert alert-warning text-sm mb-3"><span>⚠ This opening is closed but ${activeCount(o.id)} applicant(s) are still in progress.</span></div>` : ""}
+      <div class="bg-base-100 rounded-box shadow-sm p-2 flex flex-wrap gap-1 mb-4">${counts}</div>
+      <div class="grid md:grid-cols-5 gap-4">
+        <div class="md:col-span-2 bg-base-100 rounded-box shadow-sm"><ul class="menu">${rows}</ul></div>
+        <div class="md:col-span-3 bg-base-100 rounded-box shadow-sm">${detail}</div>
+      </div>
+    </section>
+  </div>`;
+}
+
+// ===== Shell =====
+const VARIANTS = [
+  { key: "A", name: "Kanban board", render: renderA },
+  { key: "B", name: "Table view", render: renderB },
+  { key: "C", name: "Openings workspace", render: renderC },
+];
+function render() {
+  const v = VARIANTS[ui.variant];
+  document.getElementById("app").innerHTML = v.render();
+  document.getElementById("variant-label").textContent = `${v.key} · ${v.name} (${ui.variant + 1}/3)`;
+  document.getElementById("last-action").textContent = "Last action: " + lastAction;
+}
+function setVariant(i) {
+  ui.variant = (i + VARIANTS.length) % VARIANTS.length;
+  try { localStorage.setItem("ats-variant", ui.variant); } catch (e) {}
+  render();
+}
+document.getElementById("prev").onclick = () => setVariant(ui.variant - 1);
+document.getElementById("next").onclick = () => setVariant(ui.variant + 1);
+document.addEventListener("keydown", e => {
+  if (["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement.tagName) || confirmDlg.open || picker.open) return;
+  if (e.key === "ArrowLeft") setVariant(ui.variant - 1);
+  if (e.key === "ArrowRight") setVariant(ui.variant + 1);
+});
+
+document.addEventListener("click", e => {
+  const el = e.target.closest("[data-act]");
+  if (!el) return;
+  const id = Number(el.dataset.id), to = el.dataset.to;
+  switch (el.dataset.act) {
+    case "move": if (picker.open) picker.close(); askMove(id, to); break;
+    case "undo": doUndo(id); break;
+    case "pick": openPicker(id); break;
+    case "toggle": toggleOpening(id); break;
+    case "b-sort": ui.b.dir = ui.b.sort === to ? -ui.b.dir : 1; ui.b.sort = to; render(); break;
+    case "c-open": ui.c.opening = id; ui.c.stage = "all"; ui.c.sel = null; render(); break;
+    case "c-stage": ui.c.stage = to; render(); break;
+    case "c-sel": ui.c.sel = id; render(); break;
+  }
+});
+document.addEventListener("change", e => {
+  const el = e.target, c = el.dataset.change;
+  if (c === "a-opening") { ui.a.opening = el.value; render(); }
+  if (c === "b-opening") { ui.b.opening = el.value; render(); }
+  if (c === "b-stage") { ui.b.stage = el.value; render(); }
+  if (c === "b-finished") { ui.b.finished = el.checked; render(); }
+  if (c === "row-stage" && el.value) askMove(Number(el.dataset.id), el.value);
+});
+document.addEventListener("input", e => {
+  if (e.target.dataset.change !== "b-q") return;
+  ui.b.q = e.target.value; render();
+  const q = document.getElementById("b-q"); q.focus(); q.setSelectionRange(q.value.length, q.value.length);
+});
+
+render();
+</script>
+</body>
+</html>

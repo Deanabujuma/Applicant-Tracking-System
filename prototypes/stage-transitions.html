@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hiring Stage Rules</title>
+<!-- THROWAWAY PROTOTYPE: not production code. Answers one design question about stage transitions. -->
+<style>
+  :root {
+    --bg: #f7f7f5; --panel: #ffffff; --ink: #1d1d1f; --muted: #6b6b70; --line: #e3e3e0;
+    --accent: #2f5bd3; --accent-soft: #e8eefc; --bad: #b3261e; --bad-soft: #fbeaea; --ok: #1f7a3f; --ok-soft: #e7f5ec;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 26px; margin: 0 0 6px; }
+  h2 { font-size: 17px; margin: 0 0 12px; }
+  p { margin: 0 0 10px; }
+  .muted { color: var(--muted); }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 20px; margin-top: 20px; }
+  .intro { border-left: 4px solid var(--accent); }
+  .rules { margin: 8px 0 0; padding-left: 20px; }
+  .rules li { margin-bottom: 4px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px 24px; }
+  .field .label { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  .field .value { font-size: 16px; font-weight: 600; }
+  .pipeline { display: flex; flex-wrap: wrap; gap: 6px; margin: 16px 0 4px; align-items: center; }
+  .chip { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); font-size: 13px; color: var(--muted); background: #fafafa; }
+  .chip.current { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
+  .chip.prev { border: 2px dashed var(--accent); color: var(--accent); }
+  .sep { color: var(--line); }
+  .changed { margin-top: 14px; padding: 10px 14px; border-radius: 8px; background: var(--accent-soft); }
+  .changed.bad { background: var(--bad-soft); color: var(--bad); }
+  .changed.ok { background: var(--ok-soft); color: var(--ok); }
+  .btnrow { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 14px; }
+  button { font: inherit; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line); background: #fff; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.danger { color: var(--bad); }
+  button.notallowed { color: var(--muted); border-style: dashed; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  .hint { font-size: 13px; color: var(--muted); }
+  .tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 14px; }
+  .tab { border: none; border-bottom: 3px solid transparent; border-radius: 0; padding: 8px 10px; background: none; color: var(--muted); }
+  .tab.active { border-bottom-color: var(--accent); color: var(--ink); font-weight: 600; }
+  .steps { list-style: none; padding: 0; margin: 12px 0 0; }
+  .steps li { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .steps .num { width: 24px; height: 24px; border-radius: 50%; background: var(--line); display: inline-flex; align-items: center; justify-content: center; font-size: 12px; flex: none; }
+  .steps li.done .num { background: var(--ok); color: #fff; }
+  .steps li.next .num { background: var(--accent); color: #fff; }
+  .watch { margin-top: 12px; padding: 10px 14px; background: #fff8e6; border-radius: 8px; font-size: 14px; }
+  .log { font-size: 13px; max-height: 220px; overflow: auto; margin: 0; padding-left: 20px; }
+  dialog { border: none; border-radius: 12px; padding: 24px; max-width: 420px; box-shadow: 0 10px 40px rgba(0,0,0,.2); }
+  dialog::backdrop { background: rgba(0,0,0,.35); }
+  dialog h3 { margin: 0 0 8px; }
+  dialog .warn { color: var(--bad); font-weight: 600; }
+  dialog .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+</style>
+</head>
+<body>
+<main>
+
+  <section class="panel intro">
+    <h1>Hiring Stage Rules — Logic Prototype</h1>
+    <p><strong>Question:</strong> Do our stage-transition, confirmation, and undo rules behave sensibly when staff move applications normally, skip stages, make mistakes, or try something that should be blocked?</p>
+    <p class="muted">Throwaway prototype. Nothing is saved; reload to start over. Rules being tested:</p>
+    <ul class="rules">
+      <li>Active stages: Applied → Screening → Interview → Final Review → Offer. Staff may move forward one stage or skip ahead (up to Offer).</li>
+      <li><strong>Hired</strong> can only be reached from <strong>Offer</strong>, and is <strong>permanent</strong> — no undo.</li>
+      <li><strong>Rejected</strong> and <strong>Withdrawn</strong> can be reached from any active stage.</li>
+      <li><strong>Undo</strong> returns the application to the stage it <em>actually</em> came from (even after a skip). It works once — you can't undo twice in a row. It never works on Hired.</li>
+      <li>Moving backward is <em>only</em> possible through Undo.</li>
+      <li>Every move asks for confirmation first. Cancel changes nothing. Undo does not ask.</li>
+      <li>Editing candidate details never changes the stage or the undo.</li>
+    </ul>
+  </section>
+
+  <section class="panel" id="state-panel">
+    <h2>Current application</h2>
+    <div class="grid" id="fields"></div>
+    <div class="pipeline" id="pipeline"></div>
+    <div class="hint">Solid = current stage. Dashed = where Undo would take it.</div>
+    <div class="changed" id="changed">Start by choosing a scenario below, or use the free-play buttons.</div>
+  </section>
+
+  <section class="panel">
+    <h2>Guided walkthroughs</h2>
+    <div class="tabs" id="tabs"></div>
+    <div id="scenario"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Free play</h2>
+    <p class="hint">Every stage is a button — even the ones the rules should block — so you can try anything. Blocked moves are shown with a dashed border.</p>
+    <div><strong>Move to stage</strong></div>
+    <div class="btnrow" id="move-buttons"></div>
+    <div><strong>Other actions</strong></div>
+    <div class="btnrow">
+      <button id="undo-btn"></button>
+      <button id="edit-btn">Edit candidate phone number</button>
+      <button id="reset-btn">Start over (new application in Applied)</button>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Activity</h2>
+    <p class="hint">Shown for this demo only — the design stores just the current stage and the one previous stage, not a full history.</p>
+    <ol class="log" id="log"></ol>
+  </section>
+
+</main>
+
+<dialog id="confirm">
+  <h3 id="confirm-title"></h3>
+  <p id="confirm-msg"></p>
+  <p class="warn" id="confirm-warn"></p>
+  <div class="actions">
+    <button id="confirm-cancel">Cancel</button>
+    <button class="primary" id="confirm-ok">Confirm</button>
+  </div>
+</dialog>
+
+<script>
+// ===== Pure rules module: no DOM in here. This is the part that becomes Django code later. =====
+const Rules = (() => {
+  const ACTIVE = ["Applied", "Screening", "Interview", "Final Review", "Offer"];
+  const CLOSED = ["Hired", "Rejected", "Withdrawn"];
+  const ALL = [...ACTIVE, ...CLOSED];
+
+  function newApplication() {
+    return { candidate: "Maria Lopez", phone: "(806) 555-0142", opening: "Junior Data Analyst",
+             stage: "Applied", previousStage: null };
+  }
+
+  // Returns null if allowed, otherwise a plain-language reason.
+  function whyNot(app, to) {
+    const from = app.stage;
+    if (from === to) return `It's already in ${to}.`;
+    if (from === "Hired") return "Hired is permanent. This application can't be changed.";
+    if (from === "Rejected" || from === "Withdrawn")
+      return `This application is ${from}. The only way out is Undo, if it's still available.`;
+    if (to === "Hired" && from !== "Offer") return "Hired can only be reached from Offer.";
+    if (to === "Rejected" || to === "Withdrawn" || to === "Hired") return null;
+    if (ACTIVE.indexOf(to) < ACTIVE.indexOf(from))
+      return "Moving backward isn't a normal move. Use Undo to correct the last move.";
+    return null;
+  }
+
+  function kindOf(app, to) {
+    if (CLOSED.includes(to)) return "final";
+    return ACTIVE.indexOf(to) - ACTIVE.indexOf(app.stage) > 1 ? "skip" : "advance";
+  }
+
+  function move(app, to) {
+    const reason = whyNot(app, to);
+    if (reason) return { ok: false, app, reason };
+    return { ok: true, app: { ...app, stage: to, previousStage: app.stage } };
+  }
+
+  function undoBlocker(app) {
+    if (app.stage === "Hired") return "Hired is permanent — it can't be undone.";
+    if (!app.previousStage) return "Nothing to undo. Undo only reverses the most recent move, once.";
+    return null;
+  }
+
+  function undo(app) {
+    const reason = undoBlocker(app);
+    if (reason) return { ok: false, app, reason };
+    return { ok: true, app: { ...app, stage: app.previousStage, previousStage: null } };
+  }
+
+  function edit(app, fields) {
+    return { ok: true, app: { ...app, ...fields } }; // stage and previousStage untouched
+  }
+
+  return { ACTIVE, CLOSED, ALL, newApplication, whyNot, kindOf, move, undo, undoBlocker, edit };
+})();
+
+// ===== Page shell =====
+let app = Rules.newApplication();
+let phoneCounter = 0;
+const $ = id => document.getElementById(id);
+
+function confirmFor(to) {
+  const kind = Rules.kindOf(app, to);
+  if (to === "Hired") return { title: "Mark as Hired?", msg: `Mark ${app.candidate} as Hired for ${app.opening}?`, warn: "This is permanent and cannot be undone." };
+  if (kind === "final") return { title: `Mark as ${to}?`, msg: `Mark ${app.candidate}'s application as ${to}?`, warn: "You can undo this once, right afterward." };
+  if (kind === "skip") return { title: "Skip ahead?", msg: `Move ${app.candidate} from ${app.stage} directly to ${to}? The stages in between will be skipped.`, warn: "" };
+  return { title: "Move forward?", msg: `Ready to move ${app.candidate} from ${app.stage} to ${to}?`, warn: "" };
+}
+
+function askConfirm(info) {
+  return new Promise(resolve => {
+    $("confirm-title").textContent = info.title;
+    $("confirm-msg").textContent = info.msg;
+    $("confirm-warn").textContent = info.warn;
+    const d = $("confirm");
+    const done = v => { d.close(); $("confirm-ok").onclick = $("confirm-cancel").onclick = null; resolve(v); };
+    $("confirm-ok").onclick = () => done("confirm");
+    $("confirm-cancel").onclick = () => done("cancel");
+    d.oncancel = e => { e.preventDefault(); done("cancel"); };
+    d.showModal();
+  });
+}
+
+function log(text) { const li = document.createElement("li"); li.textContent = text; $("log").prepend(li); }
+function say(text, tone = "") { const c = $("changed"); c.textContent = text; c.className = "changed " + tone; }
+
+// Each action returns the dialog choice ("confirm"/"cancel") or "done", so walkthroughs can track progress.
+async function doMove(to) {
+  const reason = Rules.whyNot(app, to);
+  if (reason) { say(`Blocked: ${reason}`, "bad"); log(`Tried ${app.stage} → ${to}: blocked`); render(); return "blocked"; }
+  const choice = await askConfirm(confirmFor(to));
+  if (choice === "cancel") { say(`Cancelled — nothing changed. Still in ${app.stage}.`); log(`Cancelled move to ${to}`); render(); return "cancel"; }
+  const from = app.stage;
+  app = Rules.move(app, to).app;
+  const undoNote = to === "Hired" ? "Undo is not available — Hired is permanent." : `Undo would return it to ${from}.`;
+  say(`Moved ${from} → ${to}. ${undoNote}`, "ok"); log(`${from} → ${to}`); render(); return "confirm";
+}
+
+function doUndo() {
+  const r = Rules.undo(app);
+  if (!r.ok) { say(`Blocked: ${r.reason}`, "bad"); log("Tried Undo: blocked"); render(); return "blocked"; }
+  const from = app.stage; app = r.app;
+  say(`Undone: ${from} → ${app.stage}. Undo is now used up until the next move.`, "ok"); log(`Undo: ${from} → ${app.stage}`); render(); return "done";
+}
+
+function doEdit() {
+  phoneCounter++;
+  const phone = `(806) 555-${String(142 + phoneCounter * 111).padStart(4, "0")}`;
+  app = Rules.edit(app, { phone }).app;
+  say(`Phone changed to ${phone}. Stage (${app.stage}) and Undo are unchanged.`, "ok"); log(`Edited phone → ${phone}`); render(); return "done";
+}
+
+function doReset() { app = Rules.newApplication(); phoneCounter = 0; say("New application started in Applied."); log("Started over"); render(); return "done"; }
+
+function render() {
+  const undoReason = Rules.undoBlocker(app);
+  const closed = Rules.CLOSED.includes(app.stage);
+  const status = app.stage === "Hired" ? "Permanently closed" : closed ? "Closed (undo may be available)" : "Active";
+  $("fields").innerHTML = [
+    ["Candidate", app.candidate], ["Phone", app.phone], ["Job opening", app.opening],
+    ["Current stage", app.stage], ["Status", status],
+    ["Undo", undoReason ? "Not available" : `Available → back to ${app.previousStage}`],
+  ].map(([l, v]) => `<div class="field"><div class="label">${l}</div><div class="value">${v}</div></div>`).join("");
+
+  const chip = s => `<span class="chip ${s === app.stage ? "current" : ""} ${!undoReason && s === app.previousStage ? "prev" : ""}">${s}</span>`;
+  $("pipeline").innerHTML = Rules.ACTIVE.map(chip).join('<span class="sep">›</span>') + '<span class="sep">&nbsp;|&nbsp;</span>' + Rules.CLOSED.map(chip).join(" ");
+
+  $("move-buttons").innerHTML = "";
+  Rules.ALL.forEach(s => {
+    const b = document.createElement("button");
+    b.textContent = s;
+    if (Rules.whyNot(app, s)) b.className = "notallowed";
+    else if (s === "Rejected" || s === "Withdrawn") b.className = "danger";
+    b.onclick = () => doMove(s);
+    $("move-buttons").append(b);
+  });
+  $("undo-btn").textContent = undoReason ? "Undo last move" : `Undo last move (back to ${app.previousStage})`;
+  $("undo-btn").className = undoReason ? "notallowed" : "primary";
+}
+
+$("undo-btn").onclick = doUndo;
+$("edit-btn").onclick = doEdit;
+$("reset-btn").onclick = doReset;
+
+// ===== Guided walkthroughs =====
+// step: { label, run: () => Promise<result>, expect: result that counts as "step done" }
+const mv = (to, expect = "confirm") => ({ label: `Move to ${to}` + (expect === "confirm" ? " → press Confirm" : expect === "cancel" ? " → press Cancel" : " (should be blocked)"), run: () => doMove(to), expect });
+const un = (expect = "done") => ({ label: expect === "done" ? "Press Undo" : "Press Undo again (should be blocked)", run: doUndo, expect });
+const ed = () => ({ label: "Edit candidate phone number", run: doEdit, expect: "done" });
+
+const scenarios = [
+  { name: "Happy path", start: "Applied",
+    desc: "A candidate moves through every stage and gets hired.",
+    watch: "Each move asks for confirmation. Once Hired, Undo disappears and every stage button is blocked.",
+    steps: [mv("Screening"), mv("Interview"), mv("Final Review"), mv("Offer"), mv("Hired")] },
+  { name: "Skip, then undo a misclick", start: "Applied",
+    desc: "A recruiter meant to move the candidate to Screening but clicked Interview instead.",
+    watch: "Undo goes back to Applied — where it really was — not to Screening, which it never visited.",
+    steps: [mv("Interview"), un(), mv("Screening")] },
+  { name: "No double undo", start: "Applied",
+    desc: "Can a recruiter keep pressing Undo to walk the candidate backward?",
+    watch: "The second Undo is blocked. Undo only reverses the most recent move, once — it's not a way to move backward freely.",
+    steps: [mv("Screening"), mv("Interview"), un(), un("blocked")] },
+  { name: "Accidental rejection", start: "Applied",
+    desc: "A recruiter clicks Reject on the wrong candidate during Interview and confirms by mistake.",
+    watch: "Undo restores Interview. The candidate continues as if nothing happened.",
+    steps: [mv("Screening"), mv("Interview"), mv("Rejected"), un(), mv("Final Review")] },
+  { name: "Cancel saves the day", start: "Applied",
+    desc: "A recruiter clicks Reject but catches the mistake in the confirmation dialog.",
+    watch: "Cancel changes nothing — stage and Undo stay exactly as they were.",
+    steps: [mv("Screening"), mv("Rejected", "cancel"), mv("Interview")] },
+  { name: "Withdrawn, then returns", start: "Applied",
+    desc: "The candidate withdraws at Final Review. Staff update their phone number. A few days later they change their mind.",
+    watch: "Editing the phone doesn't use up the Undo. Undo restores Final Review, so the duplicate-application rule never gets in the way.",
+    steps: [mv("Screening"), mv("Final Review"), mv("Withdrawn"), ed(), un(), mv("Offer")] },
+  { name: "Hired is permanent", start: "Applied",
+    desc: "Someone tries to reverse a confirmed hire.",
+    watch: "Undo is blocked, and Rejected / Withdrawn are blocked too. Hired is the one decision with no way back.",
+    steps: [mv("Offer"), mv("Hired"), un("blocked"), mv("Rejected", "blocked")] },
+  { name: "Blocked moves", start: "Applied",
+    desc: "Moves the rules should refuse.",
+    watch: "Applied → Hired is blocked (must go through Offer). Interview → Screening is blocked (backward only via Undo).",
+    steps: [mv("Hired", "blocked"), mv("Interview"), mv("Screening", "blocked")] },
+  { name: "❓ Reject–undo–reject loop", start: "Applied",
+    desc: "Open question: after undoing a rejection, the candidate is rejected again. Should Undo be available a second time?",
+    watch: "Under the current rules, yes — every new move earns one Undo. Is that acceptable, or should a rejection be undoable only once per application?",
+    steps: [mv("Interview"), mv("Rejected"), un(), mv("Rejected"), un()] },
+  { name: "Edit doesn't touch stage", start: "Applied",
+    desc: "Staff correct candidate details at different points.",
+    watch: "Stage and Undo target stay the same after each edit, even right after a move.",
+    steps: [ed(), mv("Screening"), ed(), un()] },
+];
+
+let current = 0, stepIndex = 0;
+
+function renderScenario() {
+  $("tabs").innerHTML = "";
+  scenarios.forEach((s, i) => {
+    const t = document.createElement("button");
+    t.className = "tab" + (i === current ? " active" : "");
+    t.textContent = s.name;
+    t.onclick = () => startScenario(i);
+    $("tabs").append(t);
+  });
+  const s = scenarios[current];
+  const box = $("scenario");
+  box.innerHTML = `<p>${s.desc}</p><p class="hint">Starting a walkthrough resets to a fresh application in Applied.</p>`;
+  const ol = document.createElement("ol"); ol.className = "steps";
+  s.steps.forEach((st, i) => {
+    const li = document.createElement("li");
+    li.className = i < stepIndex ? "done" : i === stepIndex ? "next" : "";
+    const b = document.createElement("button");
+    b.textContent = st.label;
+    b.disabled = i !== stepIndex;
+    b.onclick = async () => { const r = await st.run(); if (r === st.expect) { stepIndex++; renderScenario(); } };
+    li.innerHTML = `<span class="num">${i < stepIndex ? "✓" : i + 1}</span>`;
+    li.append(b); ol.append(li);
+  });
+  box.append(ol);
+  const w = document.createElement("div"); w.className = "watch";
+  w.innerHTML = (stepIndex >= s.steps.length ? "<strong>Done.</strong> " : "<strong>Watch for:</strong> ") + s.watch;
+  box.append(w);
+}
+
+function startScenario(i) { current = i; stepIndex = 0; doReset(); renderScenario(); }
+
+render();
+renderScenario();
+</script>
+</body>
+</html>
