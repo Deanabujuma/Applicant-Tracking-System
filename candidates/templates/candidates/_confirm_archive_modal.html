@@ -1,0 +1,32 @@
+{% comment %}
+Archive confirmation, same pattern as the delete modal. Shown by HTMX inside #modal,
+or inside confirm_archive_page.html for an ordinary GET. Loading it never changes
+data. When active applications block archiving, they're listed and there is no
+Archive button, only Cancel; the POST also re-checks, so a stale dialog can't archive.
+{% endcomment %}
+<dialog class="modal" open aria-labelledby="confirm-title">
+  <div class="modal-box">
+    <h3 id="confirm-title" class="text-lg font-bold">Archive candidate {{ candidate }}?</h3>
+    {% if candidate.is_archived %}
+    <p class="py-2">{{ candidate }} is already archived.</p>
+    {% elif blocking %}
+    <p class="py-2">{{ candidate }} can't be archived while they have active applications. Resolve these first:</p>
+    <ul id="blocking-applications" class="list-disc pl-6">
+      {% for application in blocking %}<li>{{ application.opening }} — {{ application.get_stage_display }}</li>{% endfor %}
+    </ul>
+    {% else %}
+    <p class="py-2">{{ candidate }} will be hidden from the active candidate list. Their information and application history are kept, and you can unarchive them later.</p>
+    {% endif %}
+    <div class="modal-action">
+      <form method="dialog">
+        <button type="submit" class="btn btn-ghost">Cancel</button>
+      </form>
+      {% if not blocking and not candidate.is_archived %}
+      <form method="post" action="{% url 'candidates:archive' candidate.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-warning">Archive candidate</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+</dialog>

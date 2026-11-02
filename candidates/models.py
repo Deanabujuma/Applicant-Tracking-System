@@ -39,3 +39,28 @@ class Candidate(models.Model):
 
     def get_absolute_url(self):
         return reverse("candidates:detail", kwargs={"pk": self.pk})
+
+    def archive(self):
+        """Archive this candidate unless they have active applications.
+
+        Returns the blocking active applications (with their openings): a
+        non-empty list means archiving was refused and nothing changed; an empty
+        list means the candidate is archived. Application stages are never
+        changed. "Active" comes from hiring's ``active()`` through the reverse
+        relation, so candidates never imports hiring.
+        """
+        blocking = list(self.applications.active().select_related("opening"))
+        if blocking or self.is_archived:
+            return blocking  # refused, or already archived: nothing to save
+        self.is_archived = True
+        self.save(update_fields=["is_archived", "updated_at"])
+        return []
+
+    def unarchive(self):
+        """Return an archived candidate to active use. Returns False (saving
+        nothing) if they weren't archived."""
+        if not self.is_archived:
+            return False
+        self.is_archived = False
+        self.save(update_fields=["is_archived", "updated_at"])
+        return True

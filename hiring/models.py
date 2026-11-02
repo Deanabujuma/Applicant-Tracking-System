@@ -18,6 +18,27 @@ class Stage(models.TextChoices):
     WITHDRAWN = "withdrawn", "Withdrawn"
 
 
+# The one definition of an "active" (not yet closed) stage.
+ACTIVE_STAGES = (
+    Stage.APPLIED,
+    Stage.SCREENING,
+    Stage.INTERVIEW,
+    Stage.FINAL_REVIEW,
+    Stage.OFFER,
+)
+
+
+class ApplicationQuerySet(models.QuerySet):
+    def active(self):
+        """Applications still in progress: Applied through Offer.
+
+        Hired, Rejected, and Withdrawn are closed. Read-only; it never changes
+        any record. Also available through the reverse relations, e.g.
+        ``candidate.applications.active()``, so other apps needn't import hiring.
+        """
+        return self.filter(stage__in=ACTIVE_STAGES)
+
+
 class Application(models.Model):
     """One candidate applying to one opening.
 
@@ -62,6 +83,8 @@ class Application(models.Model):
     stage_changed_at = models.DateTimeField(default=timezone.now, editable=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    objects = ApplicationQuerySet.as_manager()
 
     class Meta:
         ordering = ("created_at", "pk")

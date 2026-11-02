@@ -5,7 +5,7 @@
 {% block content %}
 <div class="card bg-base-100 shadow-sm max-w-2xl">
   <div class="card-body">
-    <h1 class="card-title">{{ candidate.first_name }} {{ candidate.last_name }}</h1>
+    <h1 class="card-title">{{ candidate.first_name }} {{ candidate.last_name }}{% if candidate.is_archived %} <span class="badge badge-neutral">Archived</span>{% endif %}</h1>
     <dl class="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2">
       <dt class="font-medium">Email</dt>
       <dd>{{ candidate.email }}</dd>
@@ -28,14 +28,20 @@
     {% endif %}
     <div class="card-actions mt-2">
       <a href="{% url 'candidates:edit' candidate.pk %}" class="btn btn-primary btn-sm">Edit</a>
-      {% if not candidate.is_archived %}
+      {% if candidate.is_archived %}
+      <form method="post" action="{% url 'candidates:unarchive' candidate.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-success btn-sm">Unarchive</button>
+      </form>
+      {% else %}
       <a href="{% url 'hiring:application_create' %}?candidate={{ candidate.pk }}" class="btn btn-sm">Add application</a>
+      <a href="{% url 'candidates:archive' candidate.pk %}" hx-get="{% url 'candidates:archive' candidate.pk %}" hx-target="#modal" class="btn btn-warning btn-sm">Archive</a>
       {% endif %}
       <a href="{% url 'candidates:delete' candidate.pk %}" hx-get="{% url 'candidates:delete' candidate.pk %}" hx-target="#modal" class="btn btn-error btn-outline btn-sm">Delete</a>
       <a href="{% url 'candidates:list' %}" class="btn btn-ghost btn-sm">All candidates</a>
     </div>
   </div>
 </div>
-{# The delete confirmation dialog is loaded here by HTMX. #}
+{# Delete and Archive confirmation dialogs are loaded here by HTMX. #}
 <div id="modal"></div>
 {% endblock %}

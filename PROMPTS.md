@@ -29,6 +29,44 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-01 — Phase 6 (archive and unarchive candidates) via `/implement`
+
+*(Continues the same session as the Phase 5 entry below. That entry's last prompt (9) also asked to begin Phase 6 and propose up to three test-first behaviors and the decisions, so the prompts here start from its approval. Long prompts are condensed to their substance; nothing is added that the prompt did not say.)*
+
+### Prompts
+1. Approved the three Phase 6 test-first behaviors and decisions 1–3 (1: Archive uses the Phase 4 confirm pattern, listing blocking applications without a Confirm button and re-checking on POST, while Unarchive is a direct POST with no modal; 2: `/candidates/` shows active candidates, `/candidates/?archived=1` shows archived ones, and an archived candidate's page has an Archived badge and Unarchive, without Add application; 3: `archive()` returns the blocking applications, an empty list meaning it archived the candidate). Write Test 1 for `Application.objects.active()` (all eight stages; only Applied through Offer returned; Hired, Rejected, and Withdrawn excluded; real Application records that still chain as a QuerySet; nothing modified) and show RED.
+2. Approved Test 1 RED. Implement GREEN: `ACTIVE_STAGES` with exactly the five active stages; `ApplicationQuerySet.active()` returning `self.filter(stage__in=ACTIVE_STAGES)`; `objects = ApplicationQuerySet.as_manager()`; working through the manager, chained querysets, and reverse relations; no record changes and no unnecessary migration.
+3. Approved Test 1 GREEN. Write Test 2 for `Candidate.archive()` (refused while any active application exists, reporting exactly the blocking applications with their openings and stages; `is_archived` stays False; every application unchanged; allowed when all applications are completed or there are none; only the archived flag and timestamp change; archiving again has no side effects; uses `candidate.applications.active()` so `candidates` never imports `hiring`) and show RED.
+4. The same message as prompt 3, sent again.
+5. Approved Test 2 RED. Implement GREEN: `archive()` in `candidates/models.py` using `self.applications.active().select_related("opening")`; return exactly the blockers without changing anything; otherwise set `is_archived`, save only `is_archived` and `updated_at`, and return an empty list; don't save again if already archived; no `hiring` import and no migration.
+6. Approved Test 2 GREEN. Write Test 3 for the Archive and Unarchive pages (refused with active applications; the confirmation lists each blocking opening and stage; no Archive button when blocked; a forged POST checked again; archived candidates hidden from the default list and shown under `?archived=1`; Unarchive instead of Archive or Add application; Unarchive is POST-only with CSRF and restores the candidate; GET never changes anything; applications and other records preserved; HTMX and full-page confirmations with Cancel; a toggle between the two lists) and show RED.
+7. Approved Test 3 RED. Implement GREEN: the GET-and-POST `archive_candidate` (read-only GET confirmation listing exactly the blockers, with only Cancel when blocked; POST checks again through `archive()` and gives a clear error naming the blockers); `Candidate.unarchive()` saving only `is_archived` and `updated_at`, and only when the candidate is archived; a POST-only `unarchive_candidate` with CSRF; repeated requests changing nothing; the active and archived lists with links between them; Archive on active candidates' pages, with an HTMX confirmation and a link fallback; the Archived badge and an Unarchive form on archived candidates' pages; no `hiring` import, migrations, or JavaScript.
+8. Approved Test 3 GREEN; all three test-first behaviors complete. Add regression tests: anonymous and deactivated users, 404, 405, CSRF, messages shown once, archiving an archived candidate and unarchiving an active one changing nothing (including `updated_at`), the archived list's empty state and link back, editing keeping the archived flag, a confirmation for an already archived candidate that can't archive again, archive GETs never changing records, blocked archives keeping every field, and a candidate detail page with no duplicate headings, nested forms, or duplicate buttons.
+9. Reported the manual browser testing as approved: the user archived a candidate, saw them in the Archived candidates list, and unarchived them; both worked. Update PROMPTS.md (keeping every earlier entry), run all checks, review git status, commit Phase 6, push, confirm a clean tree, report the commit and test results, then begin Phase 7 with `/implement`, propose up to three test-first behaviors focused on the essential dashboard, and only the decisions that need approval, and stop (this prompt).
+
+### Summary
+- **Outcome:**
+  - **`hiring`:**
+    - `ACTIVE_STAGES` (Applied, Screening, Interview, Final Review, Offer).
+    - `ApplicationQuerySet.active()` set as `Application.objects`, so `candidate.applications.active()` works without importing `hiring`. No migration.
+  - **`candidates` models:**
+    - `Candidate.archive()` returns the blocking active applications (with their openings) and changes nothing; or it archives, saving only `is_archived` and `updated_at`, and returns an empty list.
+    - `Candidate.unarchive()` saves only if the candidate was archived.
+    - Repeated calls save nothing.
+  - **`candidates` views:**
+    - `archive_candidate` at `/candidates/<pk>/archive/`: GET shows a read-only HTMX or full-page confirmation listing the blockers, with only Cancel when blocked or already archived. POST re-checks through `archive()` and shows a success, info, or error message naming each "#N Title (Stage)".
+    - `unarchive_candidate` at `/candidates/<pk>/unarchive/`: POST only, with CSRF.
+    - `CandidateListView` filters active or archived candidates with `?archived=1`, with toggle links and an empty state.
+  - **The candidate detail page:** Archive (HTMX plus link fallback) for active candidates; for archived candidates, an Archived badge and an Unarchive form, with no Archive or Add application.
+  - **Tests:** 3 test-first and 32 regression tests; 236 passing in all. Ruff, `check`, `makemigrations --check`, and `migrate --check` clean.
+  - **Manual testing (as reported):** archive, the Archived candidates list, and unarchive all worked in the browser.
+- **Deviations:** none. All three behaviors and decisions were approved as proposed.
+- **Sideways:**
+  - Tests 1 and 2 got their RED from an assertion that the method exists (`callable(getattr(...))`) instead of an `AttributeError`, so no placeholder code had to be added to the app.
+  - Test 2's `updated_at` check was loosened from `>` to `>=` before it ran, because the Windows clock may not advance between creating and archiving a record. The test still checks that no other field changes.
+  - Prompt 4 repeated prompt 3. Test 2 had already been written, so it was not redone; its RED was run again.
+  - Every regression test passed on its first run, so no app code needed fixing.
+
 ## 2026-11-01 — Phase 5 (adding applications and protected deletion) via `/implement`
 
 *(Continues the same session as the Phase 4 entry below. That entry's last prompt (19) also asked to begin Phase 5 and propose up to three test-first behaviors and the decisions, so the prompts here start from its approval. Long prompts are condensed to their substance; nothing is added that the prompt did not say.)*
