@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+
+{% block title %}Confirm move · {{ application.candidate }} · Applicant Tracking System{% endblock %}
+
+{% block content %}
+{# Ordinary (non-HTMX) GET: the same confirmation, on its own page. #}
+<p><a href="{{ selection_url }}" class="link">Back to the workspace</a></p>
+{% include "hiring/_move_confirm_modal.html" %}
+{% endblock %}

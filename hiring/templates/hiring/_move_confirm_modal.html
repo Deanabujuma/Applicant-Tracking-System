@@ -1,0 +1,49 @@
+{% comment %}
+The stage-move confirmation. Shown by HTMX inside #modal, or inside
+move_confirm_page.html for an ordinary GET. Loading it never changes data:
+only Confirm's POST does, and the server re-checks that move (rules and the
+stored stage) through Application.move_to(). expected_stage is the stage the
+employee saw when this opened, so a confirmation gone stale is refused.
+Cancel is a native <form method="dialog">: it closes the dialog, no request.
+If the move isn't allowed any more (an outdated link), only the reason and
+Cancel are shown.
+{% endcomment %}
+{% with candidate=application.candidate opening=application.opening %}
+<dialog class="modal" open aria-labelledby="confirm-title">
+  <div class="modal-box">
+    {% if reason %}
+    <h3 id="confirm-title" class="text-lg font-bold">This move isn't available</h3>
+    <p class="py-2">{{ reason }}</p>
+    {% elif kind == "hire" %}
+    <h3 id="confirm-title" class="text-lg font-bold">Mark as Hired?</h3>
+    <p class="py-2">Mark {{ candidate }} as Hired for {{ opening.title }}?</p>
+    <p class="font-semibold text-error">This is permanent and cannot be undone.</p>
+    {% elif kind == "end" %}
+    <h3 id="confirm-title" class="text-lg font-bold">Mark as {{ to_label }}?</h3>
+    <p class="py-2">Mark {{ candidate }}'s application for {{ opening.title }} as {{ to_label }}?</p>
+    <p class="text-sm opacity-70">You can undo this once, right afterward.</p>
+    {% elif kind == "skip" %}
+    <h3 id="confirm-title" class="text-lg font-bold">Skip ahead?</h3>
+    <p class="py-2">Move {{ candidate }} from {{ from_label }} directly to {{ to_label }}?</p>
+    <p class="text-sm opacity-70">The stages in between will be skipped: {{ skipped|join:", " }}.</p>
+    {% else %}
+    <h3 id="confirm-title" class="text-lg font-bold">Move forward?</h3>
+    <p class="py-2">Ready to move {{ candidate }} from {{ from_label }} to {{ to_label }}?</p>
+    {% endif %}
+    <div class="modal-action">
+      <form method="dialog">
+        <button type="submit" class="btn btn-ghost">Cancel</button>
+      </form>
+      {% if not reason %}
+      <form method="post" action="{% url 'hiring:move' application.pk %}" hx-post="{% url 'hiring:move' application.pk %}" hx-target="#workspace" hx-swap="outerHTML">
+        {% csrf_token %}
+        <input type="hidden" name="to" value="{{ to }}">
+        <input type="hidden" name="expected_stage" value="{{ application.stage }}">
+        <input type="hidden" name="opening" value="{{ scope }}">
+        <button type="submit" class="btn {% if kind == 'hire' %}btn-success{% elif kind == 'end' %}btn-error{% else %}btn-primary{% endif %}">Confirm</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+</dialog>
+{% endwith %}

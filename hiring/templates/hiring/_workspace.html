@@ -66,6 +66,19 @@
         <dt class="opacity-60">Opening</dt><dd><a class="link" href="{{ selected_application.opening.get_absolute_url }}">{{ selected_application.opening.title }}</a> ({{ selected_application.opening.department }})</dd>
         <dt class="opacity-60">Stage</dt><dd><span class="badge badge-outline badge-sm">{{ selected_application.get_stage_display }}</span></dd>
       </dl>
+      {% if forward_moves or ending_moves %}
+      {# Only the moves hiring.rules allows; each opens a confirmation (GET), and only its Confirm changes anything. #}
+      <div id="move-forward" class="mt-4 flex flex-wrap items-center gap-2">
+        <h3 class="text-sm font-semibold w-full">Move forward</h3>
+        {% for to, label in forward_moves %}<a data-move-to="{{ to }}" href="{% url 'hiring:move' selected_application.pk %}?to={{ to }}&amp;opening={{ scope }}" hx-get="{% url 'hiring:move' selected_application.pk %}?to={{ to }}&amp;opening={{ scope }}" hx-target="#modal" class="btn btn-sm {% if to == 'hired' %}btn-success{% else %}btn-primary btn-outline{% endif %}">{{ label }}</a>
+        {% endfor %}
+      </div>
+      <div id="end-application" class="mt-3 flex flex-wrap items-center gap-2">
+        <h3 class="text-sm font-semibold w-full">End application</h3>
+        {% for to, label in ending_moves %}<a data-move-to="{{ to }}" href="{% url 'hiring:move' selected_application.pk %}?to={{ to }}&amp;opening={{ scope }}" hx-get="{% url 'hiring:move' selected_application.pk %}?to={{ to }}&amp;opening={{ scope }}" hx-target="#modal" class="btn btn-sm btn-error btn-outline">{{ label }}</a>
+        {% endfor %}
+      </div>
+      {% endif %}
     </aside>
     {% endwith %}
     {% endif %}

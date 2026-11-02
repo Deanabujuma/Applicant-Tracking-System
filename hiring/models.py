@@ -2,6 +2,8 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
+from . import rules
+
 DUPLICATE_APPLICATION_MESSAGE = "This candidate has already applied to this opening."
 
 
@@ -18,14 +20,16 @@ class Stage(models.TextChoices):
     WITHDRAWN = "withdrawn", "Withdrawn"
 
 
-# The one definition of an "active" (not yet closed) stage.
-ACTIVE_STAGES = (
-    Stage.APPLIED,
-    Stage.SCREENING,
-    Stage.INTERVIEW,
-    Stage.FINAL_REVIEW,
-    Stage.OFFER,
-)
+# "Active" (not yet closed) stages, Applied through Offer, as defined by the rules.
+ACTIVE_STAGES = tuple(Stage(value) for value in rules.ACTIVE)
+
+
+class InvalidMove(Exception):
+    """A stage change the rules don't allow. The message says why."""
+
+
+class StaleMove(InvalidMove):
+    """The application's stage changed after the move was requested."""
 
 
 class ApplicationQuerySet(models.QuerySet):
@@ -98,3 +102,49 @@ class Application(models.Model):
 
     def __str__(self):
         return f"{self.candidate} → {self.opening}"
+
+    def move_to(self, to_stage, employee, expected_stage):
+        """Move to ``to_stage`` as ``employee``, if still at ``expected_stage``.
+
+        The only normal way a stage changes. The move must be allowed by
+        ``hiring.rules`` from ``expected_stage``, and it is saved with one
+        conditional UPDATE (``WHERE pk = … AND stage = expected_stage``), so the
+        stage check and the write happen together: of two employees confirming
+        from the same old stage, only one can succeed. Records the stage left
+        as ``previous_stage``, plus who and when.
+
+        Raises ``StaleMove`` if the stored stage is no longer ``expected_stage``
+        (checked first), otherwise ``InvalidMove`` with the rules' reason.
+        Neither changes anything.
+        """
+        to_stage, expected_stage = str(to_stage), str(expected_stage)
+        if {to_stage, expected_stage} <= set(rules.STAGES):
+            reason = rules.why_not(expected_stage, to_stage)
+        else:
+            reason = "That isn't a hiring stage."
+
+        if reason is None:
+            now = timezone.now()
+            changes = {
+                "stage": to_stage,
+                "previous_stage": expected_stage,
+                "stage_changed_by": employee,
+                "stage_changed_at": now,
+                "updated_at": now,  # update() skips auto_now
+            }
+            saved = Application.objects.filter(pk=self.pk, stage=expected_stage).update(
+                **changes
+            )
+            if saved:
+                for name, value in changes.items():
+                    setattr(self, name, value)
+                return
+
+        # Not saved: stale if the stage moved on, otherwise the rules said no.
+        current = Application.objects.values_list("stage", flat=True).get(pk=self.pk)
+        if current != expected_stage:
+            raise StaleMove(
+                f"This application changed to {Stage(current).label} after you "
+                "opened this. Nothing was changed."
+            )
+        raise InvalidMove(reason)

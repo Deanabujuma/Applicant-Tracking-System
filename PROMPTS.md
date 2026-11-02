@@ -29,6 +29,58 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-01 — Phase 8 (stage moves with confirmation) via `/implement`
+
+*(Continues the same session as the Phase 7 entry below. That entry's last prompt (8) also began Phase 8 and asked for up to three test-first behaviors and the decisions, so the prompts here start from their approval. Long prompts are condensed to their substance; nothing is added that the prompt did not say.)*
+
+### Prompts
+1. Approved the three Phase 8 test-first behaviors (1: the pure rules module; 2: `move_to()` with stale-stage checking; 3: the confirmed move through the workspace) and decisions 1–3 (1: refresh the whole `#workspace` after a move, with out-of-band updates only for clearing the modal and showing messages; 2: rejected HTMX POSTs return the refreshed workspace with an error alert instead of a 4xx that would need an extra dependency, with proper non-HTMX handling; 3: update Phase 7's read-only panel assertions only where Phase 8 deliberately adds actions, keeping the GET read-only guarantees and no Undo). Write Test 1 for all 64 stage pairs (forward moves and skips through Offer; no backward or same-stage moves; Hired only from Offer; Rejected and Withdrawn from any active stage; Hired, Rejected and Withdrawn terminal; `allowed_moves`, `why_not` with meaningful reasons, and `kind_of` returning advance, skip, end or hire; rules only in `hiring/rules.py`, independent of the UI; no record changes) and show RED.
+2. Approved Test 1 RED. Implement GREEN: a pure `hiring/rules.py`, independent of Django, models, views, forms and the database; the same eight values and labels as `Stage`; the approved policy; destinations in pipeline order; meaningful reasons; the four move kinds; minimal, with the stage policy not duplicated elsewhere.
+3. Approved Test 1 GREEN. Write Test 2 for `Application.move_to(to_stage, employee, expected_stage)` (a valid move sets the stage, previous stage, who and when; an invalid move raises `InvalidMove` with an explanation; a stale `expected_stage` raises `StaleMove` and changes nothing, even when the move would be valid from the newer stage; the check and the update are atomic, so two employees can't both confirm the same old stage; refused moves keep every field and timestamp; valid moves leave unrelated records alone; rules enforced in the model through `hiring/rules.py`; Hired only from Offer; no Undo; no new columns or migrations) and show RED.
+4. Approved Test 2 RED. Implement GREEN: `InvalidMove` and its subclass `StaleMove` in `hiring/models.py`; `move_to()` using the rules; one conditional UPDATE whose WHERE clause includes the ID and expected stage, with no separate check followed by an unconditional save; on zero rows, read the stored stage and raise `StaleMove`; stale takes precedence over invalid; invalid moves raise with the rules' reason; sync the in-memory object after saving; keep the constraint and relations; no Undo, migrations or dependencies.
+5. Approved Test 2 GREEN and its 409 passing tests. Write Test 3 for the confirmed workflow (the panel shows exactly the allowed moves, grouped into forward and ending, with Hire only at Offer and no actions for terminal stages; a read-only confirmation GET whose wording distinguishes advance, skip, end and permanent hire, carrying the stage seen as `expected_stage`, as an HTMX modal or a full page; Cancel changes nothing; only a confirmed POST through `move_to()` changes the stage; a successful HTMX POST refreshes the whole `#workspace`, clears the modal and shows a success message; stale or invalid POSTs change nothing and show an error with the actual stage; non-HTMX POSTs redirect with a message, keeping the selection; forged stages, expected stages and application IDs can't bypass the model; GETs stay read-only; CSRF, login and history behaviour kept; no Undo). Update Phase 7's read-only assertions only where Phase 8 deliberately adds actions, and show RED.
+6. Approved Test 3 RED (25 expected failures, 3 already passing) and all four proposed decisions (1: an outdated move link shows the reason with Cancel only; 2: an application outside the selected opening is a 404; 3: a persistent `#messages` container; 4: `#modal` kept outside `#workspace`). Implement GREEN: actions derived only from `hiring/rules.py`, in `#move-forward` and `#end-application`; GET links with `href` fallbacks targeting `#modal`; the confirmation view and wording; the expected stage, destination, scope and CSRF token in the form; Cancel never modifying anything; POST only through `move_to()`; read-only GETs; on HTMX success, the whole workspace refreshed with `#modal` cleared and `#messages` updated out of band, showing one alert; rejected HTMX POSTs show the actual stage and an error; ordinary POSTs redirect to the selection with a one-time message; 400 for malformed fields and 404 for nonexistent or out-of-scope IDs; authentication, CSRF, history and navigation kept; Phase 7 coverage kept meaningful; no Undo, search, filters, migrations, dependencies or unnecessary JavaScript; the server stays authoritative whatever is submitted.
+7. Approved Test 3 GREEN and its 437 passing tests; all three test-first behaviors complete. Add the final regression tests: `rules.LABELS` matching `Stage`; anonymous and deactivated users; 405; CSRF; viewing or cancelling never changing records; editing a candidate or opening not changing stages; terminal stages in the model and UI; messages exactly once; the selection kept after moves; accurate refreshed counts; page structure for normal, HTMX and history-restore responses; exactly one `#workspace`, `#modal` and `#messages` where appropriate; no nested forms in the dialog; forged and stale submissions; the full-page fallback without HTMX. Check that Cancel's `method="dialog"` actually works with the real modal markup, making the smallest reliable fix and a focused test if not.
+8. Reported the manual browser testing as approved, with all four checks passing: an Applied applicant shows the right forward and ending actions; Screening then Cancel closes the confirmation without changing anything; confirming Applied → Screening updates the stage, counts, sidebar and success alert; the confirmation wording and Back/Forward work. Update PROMPTS.md (keeping every earlier entry and inventing nothing), run all checks, review git status and the staged diff, commit Phase 8, push, confirm `HEAD` matches `origin/main` and the tree is clean, report the commit and test count, then load `/implement`, propose up to three test-first behaviors for Phase 9 (Undo and stage-change metadata) and only the decisions that need approval, and stop (this prompt).
+
+### Summary
+- **Outcome:**
+  - **`hiring/rules.py`:** pure Python, importing nothing.
+    - **Stages:** the eight stage values and labels, the active stages, Hired and the two endings.
+    - **`why_not(from, to)`:** returns `None` or the prototype's plain-language reason.
+    - **Other functions:** `allowed_moves(stage)`, derived from `why_not`; `kind_of(from, to)`, returning advance, skip, end or hire; and `skipped_stages(from, to)`.
+    - **Shared definition:** `ACTIVE_STAGES` in `models.py` is now built from `rules.ACTIVE`, so the list of active stages is defined once.
+  - **`Application.move_to(to_stage, employee, expected_stage)`:**
+    - **The save:** checks the rules from the expected stage, then saves with one conditional UPDATE (`WHERE pk = … AND stage = expected_stage`). It sets the stage, the previous stage (the stage actually left), who, when, and `updated_at`.
+    - **Refusals:** zero rows updated, or a refused move, raises `StaleMove` if the stored stage has moved on, otherwise `InvalidMove` with the rules' reason. Neither changes anything.
+  - **The workspace panel:** offers only the allowed moves, as GET links in `#move-forward` (with Hire at Offer) and `#end-application`. Terminal stages show none.
+  - **`/applications/<pk>/move/`:**
+    - **GET:** a read-only confirmation, as an HTMX modal or a full page. It's worded by move kind and carries the stage seen as `expected_stage`. Cancel is `<form method="dialog">`. An outdated link shows the reason with Cancel only.
+    - **POST:** moves only through `move_to()`.
+      - **HTMX:** returns the refreshed `#workspace` plus out-of-band updates clearing `#modal` and showing one alert in `#messages`.
+      - **Non-HTMX:** redirects to the selection with a one-time message.
+    - **Errors:** 400 for missing or unknown fields, and 404 for an application that doesn't exist or isn't in the scope.
+  - **Page changes:** `base.html` always has `<div id="messages">`, and `workspace.html` has `<div id="modal">` outside `#workspace`.
+  - **Not added:** migrations, dependencies, new JavaScript, and Undo.
+  - **Tests:** 3 test-first behaviors and 43 regression tests; 480 passing in all. Ruff, `check`, `makemigrations --check` and `migrate --check` are clean.
+  - **Manual testing (as reported):** the four checks in prompt 8 all passed.
+- **TDD results:**
+  - **Test 1:** RED was 75 assertion failures (no `hiring/rules.py`). GREEN: 75 passed, 350 in total.
+  - **Test 2:** RED was 59 assertion failures (no `Application.move_to`). GREEN: 59 passed, 409 in total.
+  - **Test 3:** RED was 25 assertion failures, mostly 404s from the missing move URL and missing action groups. 3 cases already passed: the terminal-stage panels, which must show no actions. GREEN: 28 passed, 437 in total.
+- **Deviations:**
+  - The user approved all of my proposals as made: the three decisions in prompt 1 and the four in prompt 6.
+  - Phase 7's `test_detail_panel_and_partial_have_no_mutation_controls` was edited as approved in decision 3.
+    - **Narrowed:** "Move" and "Confirm" are now forbidden only in the Hired panel, and "Undo" in every panel.
+    - **Kept:** the ban on forms, buttons, inputs, selects and `hx-post` in every panel.
+- **Sideways:**
+  - **Test 1's first RED:** the missing-module check was in a pytest fixture, so the 75 cases showed as setup errors rather than failures. The check was moved into each test body, with no assertion changed.
+  - **A lint error:** Ruff flagged an unused unpacked variable (RUF059) in Test 2. It was fixed by not unpacking it, not by suppressing the rule.
+  - **A failed edit:** my first attempt to add `move_to()` didn't apply, because `__str__` is the last method in the file and the insertion point didn't exist. The file was unchanged, and the method was appended at the end.
+  - **Tooling:** a bash heredoc failed to parse during Test 3 GREEN; the edit script was written to the scratchpad and run from there.
+  - **Cancel:** the review found it already correct. `<form method="dialog">` sits inside the open `<dialog>`, so it closes it with no request. A focused test that parses the HTML now checks this, with no app change.
+  - **Regression results:** every regression test passed on its first run, so no app code needed fixing.
+
 ## 2026-11-01 — Phase 7 (the hiring workspace) via `/implement`
 
 *(Continues the same session as the Phase 6 entry below. That entry's last prompt (9) also began Phase 7 and asked for up to three test-first behaviors and the decisions, so the prompts here start from their approval. Long prompts are condensed to their substance; nothing is added that the prompt did not say.)*

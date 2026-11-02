@@ -312,8 +312,12 @@ def test_detail_panel_and_partial_have_no_mutation_controls(
         _, panel = detail_panel(page)
         for forbidden in ("<form", "<button", "<input", "<select", "hx-post"):
             assert forbidden not in panel, forbidden
-        for word in ("Undo", "Move", "Confirm"):
-            assert word not in panel, word
+        # Phase 8 adds move actions (GET links to a confirmation) for active
+        # stages only; Hired still has none, and Undo waits for Phase 9.
+        assert "Undo" not in panel
+        if application.stage == Stage.HIRED:
+            for word in ("Move", "Confirm", "data-move-to"):
+                assert word not in panel, word
         # The full page's only form is the header's Log out.
         assert len(re.findall(r"<form\b", page)) == (0 if headers else 1)
 
