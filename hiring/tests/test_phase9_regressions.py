@@ -526,8 +526,13 @@ def test_panel_has_only_the_undo_form_and_no_nested_forms(
     tree = FormTree()
     tree.feed(page)
     assert all(ancestors.count("form") == 0 for _, ancestors in tree.forms)
-    # The full page also has the header's Log out form, nothing else.
-    assert len(tree.forms) == (1 if headers else 2)
+    # The full page also has the header's Log out form; both have Phase 10's
+    # search GET form, nothing else.
+    assert len(tree.forms) == (2 if headers else 3)
+    others = [a for a, _ in tree.forms if a.get("id") != "undo-form"]
+    searches = [a for a in others if a.get("id") == "workspace-search"]
+    assert len(searches) == 1
+    assert searches[0]["method"] == "get"
 
 
 def test_gets_never_change_records(employee_client, make):

@@ -318,8 +318,11 @@ def test_detail_panel_and_partial_have_no_mutation_controls(
         if application.stage == Stage.HIRED:
             for word in ("Move", "Confirm", "data-move-to"):
                 assert word not in panel, word
-        # The full page's only form is the header's Log out.
-        assert len(re.findall(r"<form\b", page)) == (0 if headers else 1)
+        # Besides the header's Log out (full page only), the one other form is
+        # Phase 10's search, a GET form outside the panel.
+        assert len(re.findall(r"<form\b", page)) == (1 if headers else 2)
+        assert len(re.findall(r'<form\b[^>]*id="workspace-search"', page)) == 1
+        assert re.search(r'<form\b[^>]*id="workspace-search"[^>]*method="get"', page)
 
 
 # --- No mutation and sidebar consistency ------------------------------------

@@ -3,10 +3,10 @@
   <aside class="lg:col-span-3 bg-base-100 rounded-box shadow-sm p-2 mb-4 lg:mb-0">
     <div class="font-semibold px-3 py-2">Openings</div>
     <ul id="openings-sidebar" class="menu menu-sm w-full">
-      <li><a href="{% url 'hiring:workspace' %}?opening=all" hx-get="{% url 'hiring:workspace' %}?opening=all" hx-target="#workspace" hx-swap="outerHTML" hx-push-url="true"{% if not selected %} aria-current="page" class="menu-active"{% endif %}>All Openings</a></li>
+      <li><a href="{{ all_openings_url }}" hx-get="{{ all_openings_url }}" hx-target="#workspace" hx-swap="outerHTML" hx-push-url="true"{% if not selected %} aria-current="page" class="menu-active"{% endif %}>All Openings</a></li>
       {% for opening in openings %}
       <li data-opening="{{ opening.pk }}">
-        <a href="{% url 'hiring:workspace' %}?opening={{ opening.pk }}" hx-get="{% url 'hiring:workspace' %}?opening={{ opening.pk }}" hx-target="#workspace" hx-swap="outerHTML" hx-push-url="true"{% if selected.pk == opening.pk %} aria-current="page"{% endif %} class="flex justify-between{% if selected.pk == opening.pk %} menu-active{% endif %}">
+        <a href="{{ opening.workspace_url }}" hx-get="{{ opening.workspace_url }}" hx-target="#workspace" hx-swap="outerHTML" hx-push-url="true"{% if selected.pk == opening.pk %} aria-current="page"{% endif %} class="flex justify-between{% if selected.pk == opening.pk %} menu-active{% endif %}">
           <span class="flex flex-col">
             <span>{{ opening }}</span>
             <span class="text-xs opacity-60">{{ opening.department }} · {{ opening.get_status_display }}</span>
@@ -28,20 +28,41 @@
       {% if selected %}<p class="text-sm opacity-70">{{ selected.department }} · {{ selected.get_status_display }}</p>{% endif %}
     </div>
 
+    {# Search: a plain GET form (no CSRF needed) that also works without HTMX. It keeps the opening, stage filter and sort, and drops the selection. The input's id lets htmx keep focus across the swap while typing. #}
+    <form id="workspace-search" method="get" action="{% url 'hiring:workspace' %}" hx-get="{% url 'hiring:workspace' %}" hx-target="#workspace" hx-swap="outerHTML" hx-push-url="true" hx-trigger="submit, input changed delay:400ms from:#workspace-q" hx-sync="this:replace" role="search">
+      <input type="hidden" name="opening" value="{{ scope }}">
+      {% for name, value in state_fields.items %}{% if name != "q" %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endif %}{% endfor %}
+      <label class="input input-sm w-full">
+        <span class="opacity-60">Search</span>
+        <input id="workspace-q" type="search" name="q" value="{{ search_text }}" maxlength="100" placeholder="Name or email" aria-label="Search applicants by name or email" class="grow">
+      </label>
+    </form>
+
     <div class="bg-base-100 rounded-box shadow-sm p-3">
+      <div class="flex items-center justify-between mb-2 text-sm">
+        <span class="font-semibold">Stages</span>
+        <a id="all-stages" href="{{ all_stages_url }}" hx-get="{{ all_stages_url }}" hx-target="#workspace" hx-swap="outerHTML" hx-push-url="true"{% if not stage_filter %} aria-current="true"{% endif %} class="link {% if not stage_filter %}font-semibold{% endif %}">All stages</a>
+      </div>
+      {# Each count filters the list to its stage; counts follow the opening and search, not the stage filter. #}
       <ul id="stage-summary" class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        {% for stage, count in stage_counts %}
-        <li data-stage="{{ stage.value }}" class="flex justify-between items-center rounded-box bg-base-200 px-3 py-2 text-sm"><span>{{ stage.label }}</span><span class="badge badge-sm">{{ count }}</span></li>
+        {% for item in stage_counts %}
+        <li data-stage="{{ item.stage.value }}"><a href="{{ item.url }}" hx-get="{{ item.url }}" hx-target="#workspace" hx-swap="outerHTML" hx-push-url="true"{% if item.active %} aria-current="true"{% endif %} class="flex justify-between items-center rounded-box px-3 py-2 text-sm {% if item.active %}bg-primary text-primary-content{% else %}bg-base-200 hover:bg-base-300{% endif %}"><span>{{ item.stage.label }}</span><span class="badge badge-sm">{{ item.count }}</span></a></li>
         {% endfor %}
       </ul>
       <p class="text-sm mt-3">Total applications: <span id="application-total" class="font-semibold">{{ total }}</span></p>
     </div>
 
     <div class="bg-base-100 rounded-box shadow-sm p-2">
+      <nav id="sort-controls" aria-label="Sort applicants" class="flex flex-wrap items-center gap-1 px-2 pb-2 text-sm">
+        <span class="opacity-60 mr-1">Sort by</span>
+        {% for link in sort_links %}
+        <a data-sort="{{ link.option }}" href="{{ link.url }}" hx-get="{{ link.url }}" hx-target="#workspace" hx-swap="outerHTML" hx-push-url="true"{% if link.active %} aria-current="true"{% endif %} class="btn btn-xs {% if link.active %}btn-primary{% else %}btn-ghost{% endif %}">{{ link.label }}{% if link.active %} <span aria-hidden="true">{% if link.descending %}▼{% else %}▲{% endif %}</span><span class="sr-only">({% if link.descending %}descending{% else %}ascending{% endif %})</span>{% endif %}</a>
+        {% endfor %}
+      </nav>
       <ul id="applicant-list" class="list">
         {% for application in applications %}
         <li data-application="{{ application.pk }}">
-          <a href="{% url 'hiring:workspace' %}?opening={{ scope }}&amp;application={{ application.pk }}" hx-get="{% url 'hiring:workspace' %}?opening={{ scope }}&amp;application={{ application.pk }}" hx-target="#workspace" hx-swap="outerHTML" hx-push-url="true"{% if selected_application.pk == application.pk %} aria-current="true"{% endif %} class="list-row items-center rounded-box hover:bg-base-200{% if selected_application.pk == application.pk %} bg-base-200{% endif %}">
+          <a href="{% url 'hiring:workspace' %}?opening={{ scope }}&amp;application={{ application.pk }}{% if state_query %}&amp;{{ state_query }}{% endif %}" hx-get="{% url 'hiring:workspace' %}?opening={{ scope }}&amp;application={{ application.pk }}{% if state_query %}&amp;{{ state_query }}{% endif %}" hx-target="#workspace" hx-swap="outerHTML" hx-push-url="true"{% if selected_application.pk == application.pk %} aria-current="true"{% endif %} class="list-row items-center rounded-box hover:bg-base-200{% if selected_application.pk == application.pk %} bg-base-200{% endif %}">
             <span class="flex flex-col">
               <span>{{ application.candidate }}{% if application.candidate.is_archived %} <span class="badge badge-ghost badge-sm">Archived</span>{% endif %}</span>
               {% if not selected %}<span class="text-xs opacity-60">{{ application.opening.title }}</span>{% endif %}
@@ -50,7 +71,7 @@
           </a>
         </li>
         {% empty %}
-        <li class="opacity-60 p-3 text-sm">No applications yet.</li>
+        <li class="opacity-60 p-3 text-sm">{% if filtered %}No matching applications.{% else %}No applications yet.{% endif %}</li>
         {% endfor %}
       </ul>
     </div>
@@ -73,12 +94,12 @@
       {# Only the moves hiring.rules allows; each opens a confirmation (GET), and only its Confirm changes anything. #}
       <div id="move-forward" class="mt-4 flex flex-wrap items-center gap-2">
         <h3 class="text-sm font-semibold w-full">Move forward</h3>
-        {% for to, label in forward_moves %}<a data-move-to="{{ to }}" href="{% url 'hiring:move' selected_application.pk %}?to={{ to }}&amp;opening={{ scope }}" hx-get="{% url 'hiring:move' selected_application.pk %}?to={{ to }}&amp;opening={{ scope }}" hx-target="#modal" class="btn btn-sm {% if to == 'hired' %}btn-success{% else %}btn-primary btn-outline{% endif %}">{{ label }}</a>
+        {% for to, label in forward_moves %}<a data-move-to="{{ to }}" href="{% url 'hiring:move' selected_application.pk %}?to={{ to }}&amp;opening={{ scope }}{% if state_query %}&amp;{{ state_query }}{% endif %}" hx-get="{% url 'hiring:move' selected_application.pk %}?to={{ to }}&amp;opening={{ scope }}{% if state_query %}&amp;{{ state_query }}{% endif %}" hx-target="#modal" class="btn btn-sm {% if to == 'hired' %}btn-success{% else %}btn-primary btn-outline{% endif %}">{{ label }}</a>
         {% endfor %}
       </div>
       <div id="end-application" class="mt-3 flex flex-wrap items-center gap-2">
         <h3 class="text-sm font-semibold w-full">End application</h3>
-        {% for to, label in ending_moves %}<a data-move-to="{{ to }}" href="{% url 'hiring:move' selected_application.pk %}?to={{ to }}&amp;opening={{ scope }}" hx-get="{% url 'hiring:move' selected_application.pk %}?to={{ to }}&amp;opening={{ scope }}" hx-target="#modal" class="btn btn-sm btn-error btn-outline">{{ label }}</a>
+        {% for to, label in ending_moves %}<a data-move-to="{{ to }}" href="{% url 'hiring:move' selected_application.pk %}?to={{ to }}&amp;opening={{ scope }}{% if state_query %}&amp;{{ state_query }}{% endif %}" hx-get="{% url 'hiring:move' selected_application.pk %}?to={{ to }}&amp;opening={{ scope }}{% if state_query %}&amp;{{ state_query }}{% endif %}" hx-target="#modal" class="btn btn-sm btn-error btn-outline">{{ label }}</a>
         {% endfor %}
       </div>
       {% endif %}
@@ -89,6 +110,7 @@
         <input type="hidden" name="expected_stage" value="{{ selected_application.stage }}">
         <input type="hidden" name="expected_changed_at" value="{{ selected_application.stage_changed_at.isoformat }}">
         <input type="hidden" name="opening" value="{{ scope }}">
+        {% for name, value in state_fields.items %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
         <button type="submit" class="btn btn-sm btn-ghost">Undo</button>
         <span class="text-xs opacity-70">Returns it to {{ undo_to }}, once.</span>
       </form>

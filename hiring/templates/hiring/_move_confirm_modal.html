@@ -41,6 +41,7 @@ Cancel are shown.
         <input type="hidden" name="expected_stage" value="{{ application.stage }}">
         <input type="hidden" name="expected_changed_at" value="{{ application.stage_changed_at.isoformat }}">
         <input type="hidden" name="opening" value="{{ scope }}">
+        {% for name, value in state_fields.items %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
         <button type="submit" class="btn {% if kind == 'hire' %}btn-success{% elif kind == 'end' or kind == 'skip' %}btn-error{% else %}btn-primary{% endif %}">Confirm</button>
       </form>
       {% endif %}

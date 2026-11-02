@@ -7,7 +7,7 @@ Python, Django, SQLite, uv, Tailwind CSS + DaisyUI via django-tailwind-cli, HTMX
 
 ## Apps and boundaries
 - `candidates`: Candidate, Source choices, archive/unarchive, candidate deletion rules.
-- `openings`: JobOpening, Skill, Open/Closed status, close/reopen, inline skill creation.
+- `openings`: JobOpening, Skill, Open/Closed status, close/reopen, inline adding and removing of an opening's skills (only Save changes its skill links).
 - `hiring`: Application, stages, pure transition-rules module, `move_to()` / `undo()`, application creation, workspace.
 - One-way dependency: `hiring` imports `candidates` and `openings`; they never import `hiring` (FKs use string model references; archiving uses `candidate.applications.active()`).
 
@@ -16,7 +16,11 @@ Python, Django, SQLite, uv, Tailwind CSS + DaisyUI via django-tailwind-cli, HTMX
 - Forward one step or skip up to Offer; Hired only from Offer; Rejected/Withdrawn from any active stage; no backward moves.
 - Hired is permanent: no moves, no Undo. Undo returns to the actual previous stage once, then is unavailable until a new move.
 - Stages change only through `move_to()` / `undo()`, which consult the rules module; no transition logic in views or JavaScript.
-- Every move needs a Confirm/Cancel modal (Undo has none). POSTs re-validate and reject stale requests (expected stage; Undo also checks `stage_changed_at`).
+- Every move needs a Confirm/Cancel modal (Undo has none). Move and Undo POSTs both require `expected_stage` and `expected_changed_at` (`stage_changed_at`), re-validate, and reject stale requests.
+
+## Workspace URL state
+- `/` takes `opening` (`all` or an ID), `application`, `q` (search, trimmed, max 100), `stage` (a stage value) and `sort` (`name`, `stage`, `updated`, `opening`; a leading `-` reverses). Invalid values are 400.
+- Links, the search GET form, move confirmations, Undo forms and post-move/Undo responses keep `opening`, `q`, `stage` and `sort`. Switching openings, changing the stage filter or searching clears the selected application; sorting keeps it.
 
 ## Auth and data protection
 - Every view requires login. Accounts are admin-created only; no registration, no roles; deactivated accounts lose access.

@@ -29,6 +29,86 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-01 — Phase 10 (search, filtering, sorting and workspace state) via `/implement`
+
+*(Continues the same session as the Phase 9 entry below, whose last prompt (9) also began Phase 10 and asked for up to three test-first behaviors and the decisions, so the prompts here start from their approval. The conversation's context was compacted once, before Test 2 RED; the earlier prompts are recorded from the session's summary. Long prompts are condensed to their substance; nothing is added that the prompt did not say.)*
+
+### Prompts
+1. Approved the three Phase 10 test-first behaviors (1: search `q` and the stage filter; 2: sorting; 3: the full filter state kept in the URL through navigation, moves and Undo) and all four decisions: stage counts follow the opening and search but not the stage filter, while sidebar counts stay unfiltered; the selected application's panel stays visible even when it no longer matches the filters; sorting uses compact sort links on the existing list, not a table; older form-count assertions are updated only where the search GET form is introduced. Write Test 1 and show RED.
+2. Approved Test 1 RED (21 failing, 2 passing). Implement GREEN using efficient Django ORM filtering.
+3. "Phase 10 Test 1 GREEN is already approved. Please do not repeat Test 1." Write Test 2 for sorting (`name` default by last name, first name and ID; `stage` in pipeline order; `updated` newest first; `opening` by title; ascending and descending; clicking the active option reverses it; ID as the final tie-breaker; All Openings and single openings, combined with `q` and `stage`; compact sort links without replacing the list; normal and HTMX navigation; 400 for unknown values; no record changes; counts, Archived indicators and the panel kept), show RED, confirm the 751 existing tests pass, and stop.
+4. Approved Test 2 RED (40 failures) and keeping the selected application's panel open when sorting. Implement GREEN: the four sorts and `-` reversal, name tie-breakers then ID, ORM ordering, a compact `#sort-controls` nav with a direction indicator, href and HTMX links, keeping opening, `q`, `stage` and the selection, the existing `#applicant-list`, 400 for unknown values, counts and read-only GETs kept, no migrations, dependencies or JavaScript, and nothing from Test 3.
+5. Approved Test 2 GREEN (813 passing). Write Test 3 for the complete filter state (sidebar, stage, All stages, sort and row links; a search GET form with HTMX, `hx-push-url` and a short typing delay; one URL reproducing the view for full page, HTMX and history restore; move links, confirmations and POSTs; Undo forms and POSTs; the panel kept when an applicant leaves the filter; 400 for invalid values; CSRF, login, stale checks, read-only GETs and counts kept; older form-count tests updated only where they conflict). Show RED and confirm the 813 existing tests pass.
+6. Approved Test 3 RED (31 failing, 7 passing) and its navigation decisions: switching openings, changing the stage filter, or submitting a new search clears the selected application while keeping the other settings; sorting keeps the selection. Implement GREEN, update the Phase 7 and Phase 9 form-count assertions and the Phase 10 sidebar-link expectations only as needed, keep every check against mutation controls and nested forms, show the exact changes to existing tests, and run every check including the Tailwind build.
+7. Approved Test 3 GREEN (851 passing). Add the final Phase 10 regression tests for genuine gaps only (access, 400s, search, counts, pipeline sort, tie-breakers, link state, search form and typing delay, HTMX and history, moves and Undo keeping state, the panel after leaving the filter, refused requests, Archived candidates, GET-only search and CSRF, no duplicate containers, read-only GETs), fix genuine regressions only, and stop before manual testing.
+8. Provided the official Project #1 assignment checklist. Finish the regressions, then do a read-only audit (prototypes, PRD and plan, CLAUDE.md, per-phase commits, PROMPTS.md sessions, and the evidence for the four reflection questions), reporting VERIFIED, MISSING or NEEDS REVIEW, without writing REFLECTION.md or its answers.
+9. Approved the regressions (868 passing). Repeat the read-only audit against the actual repository contents, including what PROMPTS.md still needs for Phase 10 and any missing deliverable; no file changes.
+10. Approved the audit. Correction: all five Phase 10 manual browser checks had already been done and passed. Finalize Phase 10: add the UI prototype's design question without changing its three variants or inventing history; update CLAUDE.md (inline adding and removing of skills; moves and Undo both validating the expected stage and `stage_changed_at`; the `q`, `stage` and `sort` URL parameters); add this PROMPTS.md entry; don't tick the plan's acceptance criteria unless each is verified; run every check; inspect the diff; commit only the intended files as "Phase 10: Search, filtering, sorting and workspace state", push, and verify (this prompt).
+
+### Summary
+- **Outcome:**
+  - **Search and the stage filter:** `q` is trimmed, limited to 100 characters, and matches a candidate's first, last or full name or email, ignoring case. It runs as one database query with no extra JavaScript.
+    - **`stage`:** filters the list to one stored stage value.
+    - **Stage counts:** they're now links. They follow the opening and the search but not the stage filter, and an "All stages" link clears the filter.
+    - **Sidebar counts:** they ignore every filter.
+    - **Empty results:** the list says "No matching applications."
+  - **Sorting:** `sort=name` (the default), `stage` (in pipeline order, via a `Case`/`When`), `updated` (newest stage change first) or `opening` (by job title). A leading `-` reverses it, and ties fall back to last name, first name, then application ID. All of it is done in the ORM.
+    - **The links:** a compact `#sort-controls` nav above the unchanged `#applicant-list`, with ▲ or ▼ and screen-reader text on the active option. Clicking the active option reverses it.
+  - **Filter state:** `opening`, `q`, `stage` and `sort` are carried by:
+    - the sidebar, stage, All stages, sort and applicant-row links
+    - a new `#workspace-search` GET form: `type="search"`, hidden `opening`, `stage` and `sort`, `hx-get` into `#workspace`, `hx-push-url`, and `hx-trigger="submit, input changed delay:400ms from:#workspace-q"`
+    - move links, the confirmation form and its Back link
+    - the Undo form
+    - HTMX re-renders and the normal redirects after moves and Undo, whether they succeed or are refused
+  - **What clears the selection:** switching openings, changing the stage filter, or searching clears the selected application; sorting keeps it. After a move or Undo, the panel stays on the applicant even if they've left the filtered list.
+  - **Bad values:** an invalid `q`, `stage` or `sort` is a 400 on the workspace, move confirmations, move POSTs and Undo POSTs.
+  - **Not added:** migrations, dependencies or JavaScript files.
+  - **Tests:**
+    - Test 1: 23 cases in `test_workspace_filters.py`.
+    - Test 2: 62 cases in `test_workspace_sorting.py`.
+    - Test 3: 38 cases in `test_workspace_state.py`.
+    - Regressions: 17 cases in `test_phase10_regressions.py`.
+    - **Total:** 868 passing, with Ruff, `check`, `makemigrations --check` and `migrate --check` clean and the Tailwind build passing.
+  - **Manual testing (as reported):** all five student checks passed:
+    - search and the URL updating
+    - stage filtering, sorting and opening navigation
+    - moving an applicant out of a filtered stage while the panel stays selected
+    - Undo restoring the previous stage while keeping the filters
+    - browser Back and Forward restoring the workspace state
+  - **Documentation corrections:**
+    - `prototypes/dashboard-variants.html` gained a comment stating its original design question. Its three variants are unchanged.
+    - CLAUDE.md now describes inline adding and removing of skills, both moves and Undo validating `expected_stage` and `expected_changed_at`, and the workspace URL parameters.
+    - The plan's acceptance-criteria boxes were left unticked.
+- **TDD results:**
+  - **Test 1:** RED was 21 assertion failures and 2 passing cases. GREEN: 23 passed, 751 in total.
+  - **Test 2:** RED was 40 assertion failures and 22 passing cases. Those 22 already matched the old name order or checked that something stays unchanged. GREEN: 62 passed, 813 in total.
+  - **Test 3:** RED was 31 assertion failures and 7 passing guards. GREEN: 38 passed, 851 in total.
+  - **Regressions:** all 17 passed on their first run, so no app code needed fixing. 868 in total.
+- **Deviations:**
+  - **Prompt 3** asked me not to repeat Test 1, so I went straight to Test 2.
+  - **The navigation rules for the selection** (prompt 6) were my proposal in the Test 3 RED report. The user approved them. Keeping the selection when sorting (prompt 4) had also been my proposal.
+  - **The audit (prompts 8 and 9)** wasn't part of the plan's phase work; the user asked for it against the assignment checklist.
+  - **Manual verification:** my audit listed it as pending, and the user corrected this in prompt 10: it had already been done and passed.
+- **Sideways:**
+  - **A `noqa` slip:** my first draft of the sorting test file used `noqa: E731` comments for lambdas, breaking the no-`noqa` rule. I rewrote the file without lambdas or `noqa` before anything ran.
+  - **Test fixes before RED was reported:**
+    - Ruff flagged a function call in a default argument (B008). I fixed it in the code.
+    - One assertion compared the selected ID as a string, not an integer.
+    - A Test 3 assertion compared a stage enum where its value was meant.
+  - **The two test-helper URL corrections** (Test 2 GREEN):
+    - **What failed:** 9 sort-link tests still failed after the implementation.
+    - **The cause:** two tests passed a full `/?…` URL to a helper that adds `/?` itself, so the opening was dropped. The second test had only been passing by luck, because its scope was already All Openings.
+    - **The fix:** I removed the duplicate prefix at those two calls. Their assertions and expected values are unchanged.
+  - **Older tests updated in Test 3 GREEN.** Each was updated narrowly, with its mutation-control and nested-form checks kept:
+    - `test_phase7_regressions.py`: the page form count went from 0 or 1 to 1 or 2, and it now checks the extra form is the GET search.
+    - `test_phase9_regressions.py`: the form count went from 1 or 2 to 2 or 3, again checking the extra form is the GET search.
+    - `test_workspace_filters.py`: two sidebar-link expectations now include `q`.
+    - `test_workspace_sorting.py`: one test compared the stage summary's full HTML, which now carries `sort`. It now compares the counts per stage and the stage order. I hadn't predicted this conflict.
+  - **Tooling:**
+    - Bash heredocs failed again for a large edit script, so it was written to the scratchpad with the Write tool and run from there.
+    - One full-suite run asked for parallel workers (`-n auto`), which aren't installed, so it ran nothing. It was re-run normally.
+    - A duplicate background suite run was stopped.
+
 ## 2026-11-01 — Phase 9 (Undo and last-change info) via `/implement`
 
 *(Continues the same session as the Phase 8 entry below. That entry's last prompt (8) also began Phase 9 and asked for up to three test-first behaviors and the decisions, so the prompts here start from their approval. Long prompts are condensed to their substance; nothing is added that the prompt did not say.)*
