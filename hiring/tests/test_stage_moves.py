@@ -155,8 +155,15 @@ def confirm_url(application, to, scope="all"):
     return f"{move_url(application)}?to={to}&opening={scope}"
 
 
-def post_data(to, expected, scope="all"):
-    return {"to": to, "expected_stage": expected, "opening": scope}
+def post_data(to, expected, scope="all", changed_at=LONG_AGO):
+    """A move POST. ``changed_at`` is the stage-change timestamp the employee
+    saw; ``make`` gives every application LONG_AGO until something changes it."""
+    return {
+        "to": to,
+        "expected_stage": expected,
+        "expected_changed_at": changed_at.isoformat(),
+        "opening": scope,
+    }
 
 
 # --- The panel's actions ----------------------------------------------------
@@ -350,10 +357,15 @@ def test_non_htmx_post_redirects_to_the_same_selection(employee_client, make):
 def stale_setup(make, employee):
     """Opened at Applied; another employee then moved it to Screening."""
     application = make(S.APPLIED)
-    Application.objects.get(pk=application.pk).move_to(
-        S.SCREENING, employee, expected_stage=S.APPLIED
+    other_view = Application.objects.get(pk=application.pk)
+    other_view.move_to(
+        S.SCREENING,
+        employee,
+        expected_stage=S.APPLIED,
+        expected_changed_at=other_view.stage_changed_at,
     )
-    return application, post_data(S.INTERVIEW, S.APPLIED)  # valid from Screening
+    # The page was opened at Applied (LONG_AGO); Interview is valid from Screening.
+    return application, post_data(S.INTERVIEW, S.APPLIED, changed_at=LONG_AGO)
 
 
 @pytest.mark.parametrize(

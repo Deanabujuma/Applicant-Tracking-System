@@ -39,8 +39,9 @@ Cancel are shown.
         {% csrf_token %}
         <input type="hidden" name="to" value="{{ to }}">
         <input type="hidden" name="expected_stage" value="{{ application.stage }}">
+        <input type="hidden" name="expected_changed_at" value="{{ application.stage_changed_at.isoformat }}">
         <input type="hidden" name="opening" value="{{ scope }}">
-        <button type="submit" class="btn {% if kind == 'hire' %}btn-success{% elif kind == 'end' %}btn-error{% else %}btn-primary{% endif %}">Confirm</button>
+        <button type="submit" class="btn {% if kind == 'hire' %}btn-success{% elif kind == 'end' or kind == 'skip' %}btn-error{% else %}btn-primary{% endif %}">Confirm</button>
       </form>
       {% endif %}
     </div>

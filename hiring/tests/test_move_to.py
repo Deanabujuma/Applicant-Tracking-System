@@ -1,4 +1,5 @@
-"""Phase 8 Test 2: ``Application.move_to(to_stage, employee, expected_stage)``."""
+"""Phase 8 Test 2: ``Application.move_to(to_stage, employee, expected_stage,
+expected_changed_at)`` (the timestamp became required in Phase 9)."""
 
 import datetime
 
@@ -100,7 +101,12 @@ def test_valid_move_records_stage_previous_stage_who_and_when(
     before = row(application)
     started = timezone.now()
 
-    application.move_to(to, mover, expected_stage=start)
+    application.move_to(
+        to,
+        mover,
+        expected_stage=start,
+        expected_changed_at=application.stage_changed_at,
+    )
 
     after = row(application)
     assert after["stage"] == to
@@ -145,7 +151,12 @@ def test_every_invalid_move_raises_and_changes_nothing(recruiter, mover, start, 
     before = everything()
 
     with pytest.raises(invalid) as caught:
-        application.move_to(to, mover, expected_stage=start)
+        application.move_to(
+            to,
+            mover,
+            expected_stage=start,
+            expected_changed_at=application.stage_changed_at,
+        )
 
     assert not isinstance(caught.value, stale)
     assert str(caught.value) == rules.why_not(start, to)  # the rules' reason
@@ -158,11 +169,21 @@ def test_hired_only_from_offer(recruiter, mover, start):
     application = make_application(recruiter, start)
 
     with pytest.raises(invalid, match="Hired can only be reached from Offer"):
-        application.move_to(S.HIRED, mover, expected_stage=start)
+        application.move_to(
+            S.HIRED,
+            mover,
+            expected_stage=start,
+            expected_changed_at=application.stage_changed_at,
+        )
     assert row(application)["stage"] == start
 
     offer = make_application(recruiter, S.OFFER, first="Ben")
-    offer.move_to(S.HIRED, mover, expected_stage=S.OFFER)
+    offer.move_to(
+        S.HIRED,
+        mover,
+        expected_stage=S.OFFER,
+        expected_changed_at=offer.stage_changed_at,
+    )
     assert row(offer)["stage"] == S.HIRED
 
 
@@ -172,7 +193,12 @@ def test_unknown_stage_value_is_an_invalid_move(recruiter, mover):
     before = everything()
 
     with pytest.raises(invalid) as caught:
-        application.move_to("promoted", mover, expected_stage=S.APPLIED)
+        application.move_to(
+            "promoted",
+            mover,
+            expected_stage=S.APPLIED,
+            expected_changed_at=application.stage_changed_at,
+        )
 
     assert not isinstance(caught.value, stale)
     assert str(caught.value)
@@ -189,12 +215,22 @@ def test_stale_move_cannot_overwrite_a_newer_change(recruiter, mover):
     first_view = Application.objects.get(pk=application.pk)
     second_view = Application.objects.get(pk=application.pk)  # same old stage
 
-    first_view.move_to(S.SCREENING, recruiter, expected_stage=S.APPLIED)
+    first_view.move_to(
+        S.SCREENING,
+        recruiter,
+        expected_stage=S.APPLIED,
+        expected_changed_at=first_view.stage_changed_at,
+    )
     newer = everything()
 
     # Interview would be a valid move from Screening, yet it must be refused.
     with pytest.raises(stale) as caught:
-        second_view.move_to(S.INTERVIEW, mover, expected_stage=S.APPLIED)
+        second_view.move_to(
+            S.INTERVIEW,
+            mover,
+            expected_stage=S.APPLIED,
+            expected_changed_at=second_view.stage_changed_at,
+        )
 
     message = str(caught.value)
     assert "Screening" in message  # where it actually is now
@@ -217,7 +253,12 @@ def test_expected_stage_mismatch_is_stale(recruiter, mover, expected, to):
     before = everything()
 
     with pytest.raises(stale):
-        application.move_to(to, mover, expected_stage=expected)
+        application.move_to(
+            to,
+            mover,
+            expected_stage=expected,
+            expected_changed_at=application.stage_changed_at,
+        )
 
     assert everything() == before
 
@@ -233,7 +274,12 @@ def test_both_confirmations_of_the_same_old_stage_cannot_succeed(recruiter, move
         views, [(S.OFFER, recruiter), (S.REJECTED, mover)], strict=True
     ):
         try:
-            view.move_to(to, who, expected_stage=S.INTERVIEW)
+            view.move_to(
+                to,
+                who,
+                expected_stage=S.INTERVIEW,
+                expected_changed_at=view.stage_changed_at,
+            )
             outcomes.append("moved")
         except stale:
             outcomes.append("stale")
@@ -251,7 +297,12 @@ def test_stage_check_and_update_are_one_conditional_update(recruiter, mover):
     application = make_application(recruiter, S.APPLIED)
 
     with CaptureQueriesContext(connection) as queries:
-        application.move_to(S.SCREENING, mover, expected_stage=S.APPLIED)
+        application.move_to(
+            S.SCREENING,
+            mover,
+            expected_stage=S.APPLIED,
+            expected_changed_at=application.stage_changed_at,
+        )
 
     writes = [
         q["sql"] for q in queries if q["sql"].lstrip().upper().startswith("UPDATE")

@@ -65,6 +65,9 @@
         <dt class="opacity-60">Source</dt><dd>{{ candidate.get_source_display }}</dd>
         <dt class="opacity-60">Opening</dt><dd><a class="link" href="{{ selected_application.opening.get_absolute_url }}">{{ selected_application.opening.title }}</a> ({{ selected_application.opening.department }})</dd>
         <dt class="opacity-60">Stage</dt><dd><span class="badge badge-outline badge-sm">{{ selected_application.get_stage_display }}</span></dd>
+        {% with changer=selected_application.stage_changed_by %}
+        <dt class="opacity-60">Last stage change</dt><dd>{{ changer.get_full_name|default:changer.get_username }} · <time datetime="{{ selected_application.stage_changed_at.isoformat }}">{{ selected_application.stage_changed_at|date:"M j, Y, g:i a" }}</time></dd>
+        {% endwith %}
       </dl>
       {% if forward_moves or ending_moves %}
       {# Only the moves hiring.rules allows; each opens a confirmation (GET), and only its Confirm changes anything. #}
@@ -78,6 +81,17 @@
         {% for to, label in ending_moves %}<a data-move-to="{{ to }}" href="{% url 'hiring:move' selected_application.pk %}?to={{ to }}&amp;opening={{ scope }}" hx-get="{% url 'hiring:move' selected_application.pk %}?to={{ to }}&amp;opening={{ scope }}" hx-target="#modal" class="btn btn-sm btn-error btn-outline">{{ label }}</a>
         {% endfor %}
       </div>
+      {% endif %}
+      {% if undo_to %}
+      {# Undo: a direct POST, no confirmation. It carries the state shown here; the server refuses it if anything changed since. #}
+      <form id="undo-form" method="post" action="{% url 'hiring:undo' selected_application.pk %}" hx-post="{% url 'hiring:undo' selected_application.pk %}" hx-target="#workspace" hx-swap="outerHTML" class="mt-3 flex flex-wrap items-center gap-2">
+        {% csrf_token %}
+        <input type="hidden" name="expected_stage" value="{{ selected_application.stage }}">
+        <input type="hidden" name="expected_changed_at" value="{{ selected_application.stage_changed_at.isoformat }}">
+        <input type="hidden" name="opening" value="{{ scope }}">
+        <button type="submit" class="btn btn-sm btn-ghost">Undo</button>
+        <span class="text-xs opacity-70">Returns it to {{ undo_to }}, once.</span>
+      </form>
       {% endif %}
     </aside>
     {% endwith %}

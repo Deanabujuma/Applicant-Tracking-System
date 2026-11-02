@@ -71,3 +71,27 @@ def skipped_stages(from_stage, to_stage):
         return []
     start, end = ACTIVE.index(from_stage), ACTIVE.index(to_stage)
     return [LABELS[stage] for stage in ACTIVE[start + 1 : end]]
+
+
+def undo_blocker(stage, previous_stage):
+    """None if Undo may return ``stage`` to ``previous_stage``; else why not.
+
+    Undo reverses the latest recorded move, once. It is never available from
+    Hired (permanent), nor without a previous stage (none yet, or already
+    undone). The recorded move ``previous_stage -> stage`` must be one the
+    move rules allow, so Undo can only go back where the application really
+    came from, never to an impossible or corrupted stage.
+    """
+    stage = str(stage)
+    if stage == HIRED:
+        return "Hired is permanent — it can't be undone."
+    if previous_stage is None:
+        return "Nothing to undo. Undo only reverses the most recent move, once."
+    previous_stage = str(previous_stage)
+    if (
+        stage not in LABELS
+        or previous_stage not in LABELS
+        or why_not(previous_stage, stage) is not None
+    ):
+        return "The recorded previous stage doesn't match a move to this stage, so it can't be undone."
+    return None

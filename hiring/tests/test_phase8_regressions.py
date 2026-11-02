@@ -6,12 +6,12 @@ from html.parser import HTMLParser
 
 import pytest
 from django.test import Client
-from django.utils import timezone
 
 from candidates.models import Candidate, Source
 from hiring import rules
 from hiring.models import ACTIVE_STAGES, Application, InvalidMove, Stage
 from hiring.tests.test_stage_moves import (
+    LONG_AGO,
     alerts,
     confirm_form,
     confirm_url,
@@ -33,7 +33,6 @@ from openings.models import JobOpening
 pytestmark = pytest.mark.django_db
 
 S = Stage
-LONG_AGO = timezone.now() - datetime.timedelta(days=3)
 RESTORE = {**HTMX, "HTTP_HX_HISTORY_RESTORE_REQUEST": "true"}
 TERMINAL = [S.HIRED, S.REJECTED, S.WITHDRAWN]
 
@@ -315,8 +314,12 @@ def test_terminal_stages_stay_terminal_in_model_and_ui(
 
     for to in Stage:
         with pytest.raises(InvalidMove):
-            Application.objects.get(pk=application.pk).move_to(
-                to, employee, expected_stage=stage
+            view = Application.objects.get(pk=application.pk)
+            view.move_to(
+                to,
+                employee,
+                expected_stage=stage,
+                expected_changed_at=view.stage_changed_at,
             )
         for headers in ({}, HTMX):
             employee_client.post(move_url(application), post_data(to, stage), **headers)
@@ -577,10 +580,19 @@ def test_full_page_fallback_works_without_htmx(employee):
     assert "<html" in page
     assert "Move forward?" in page
     token = re.search(r'name="csrfmiddlewaretoken" value="([^"]+)"', page).group(1)
+    seen = re.search(r'name="expected_changed_at" value="([^"]+)"', page).group(1)
 
     response = csrf_client.post(
         move_url(application),
-        {**post_data(S.OFFER, S.FINAL_REVIEW, scope), "csrfmiddlewaretoken": token},
+        {
+            **post_data(
+                S.OFFER,
+                S.FINAL_REVIEW,
+                scope,
+                changed_at=datetime.datetime.fromisoformat(seen),
+            ),
+            "csrfmiddlewaretoken": token,
+        },
         follow=True,
     )
 

@@ -103,17 +103,21 @@ class Application(models.Model):
     def __str__(self):
         return f"{self.candidate} → {self.opening}"
 
-    def move_to(self, to_stage, employee, expected_stage):
-        """Move to ``to_stage`` as ``employee``, if still at ``expected_stage``.
+    def move_to(self, to_stage, employee, expected_stage, expected_changed_at):
+        """Move to ``to_stage`` as ``employee``, if nothing changed since.
 
-        The only normal way a stage changes. The move must be allowed by
+        The only normal way a stage changes. ``expected_stage`` and
+        ``expected_changed_at`` are the stage and ``stage_changed_at`` the
+        employee saw; every move and Undo updates that timestamp, so together
+        they identify the exact state (a stage that was changed and changed
+        back still counts as changed). The move must be allowed by
         ``hiring.rules`` from ``expected_stage``, and it is saved with one
-        conditional UPDATE (``WHERE pk = … AND stage = expected_stage``), so the
-        stage check and the write happen together: of two employees confirming
-        from the same old stage, only one can succeed. Records the stage left
-        as ``previous_stage``, plus who and when.
+        conditional UPDATE (``WHERE pk = … AND stage = … AND stage_changed_at =
+        …``), so the checks and the write happen together: of two employees
+        confirming from the same state, only one can succeed. Records the stage
+        left as ``previous_stage``, plus who and when.
 
-        Raises ``StaleMove`` if the stored stage is no longer ``expected_stage``
+        Raises ``StaleMove`` if the stored stage or timestamp no longer matches
         (checked first), otherwise ``InvalidMove`` with the rules' reason.
         Neither changes anything.
         """
@@ -132,19 +136,80 @@ class Application(models.Model):
                 "stage_changed_at": now,
                 "updated_at": now,  # update() skips auto_now
             }
-            saved = Application.objects.filter(pk=self.pk, stage=expected_stage).update(
-                **changes
-            )
+            saved = Application.objects.filter(
+                pk=self.pk,
+                stage=expected_stage,
+                stage_changed_at=expected_changed_at,
+            ).update(**changes)
             if saved:
                 for name, value in changes.items():
                     setattr(self, name, value)
                 return
 
-        # Not saved: stale if the stage moved on, otherwise the rules said no.
-        current = Application.objects.values_list("stage", flat=True).get(pk=self.pk)
+        # Not saved: stale if anything changed, otherwise the rules said no.
+        current, changed_at = Application.objects.values_list(
+            "stage", "stage_changed_at"
+        ).get(pk=self.pk)
         if current != expected_stage:
             raise StaleMove(
                 f"This application changed to {Stage(current).label} after you "
                 "opened this. Nothing was changed."
             )
+        if changed_at != expected_changed_at:
+            raise StaleMove(
+                "This application was changed by someone else after you opened "
+                f"this (it's in {Stage(current).label} again). Nothing was changed."
+            )
         raise InvalidMove(reason)
+
+    def undo(self, employee, expected_stage, expected_changed_at):
+        """Undo the latest move as ``employee``, if nothing changed since.
+
+        ``expected_stage`` and ``expected_changed_at`` are the stage and
+        ``stage_changed_at`` shown with the Undo button. Every move and Undo
+        updates ``stage_changed_at``, so together they identify that exact
+        state: if either differs from the stored row, another employee moved
+        or undid the application, and ``StaleMove`` is raised (checked first).
+        Otherwise ``hiring.rules.undo_blocker`` decides, using the stored
+        history, and a refusal raises ``InvalidMove`` with its reason.
+
+        Undo returns to the stored ``previous_stage`` and clears it, so it is
+        single-use until a new move. It is saved with one conditional UPDATE
+        matching the ID, expected stage, expected timestamp, and the stored
+        previous stage, so the checks and the write happen together. Nothing
+        changes when it raises.
+        """
+        stale = StaleMove(
+            "This application changed after this page loaded. Nothing was undone."
+        )
+        expected_stage = str(expected_stage)
+        stored = Application.objects.values(
+            "stage", "previous_stage", "stage_changed_at"
+        ).get(pk=self.pk)
+        if (
+            stored["stage"] != expected_stage
+            or stored["stage_changed_at"] != expected_changed_at
+        ):
+            raise stale
+        reason = rules.undo_blocker(stored["stage"], stored["previous_stage"])
+        if reason is not None:
+            raise InvalidMove(reason)
+
+        now = timezone.now()
+        changes = {
+            "stage": stored["previous_stage"],
+            "previous_stage": None,
+            "stage_changed_by": employee,
+            "stage_changed_at": now,
+            "updated_at": now,  # update() skips auto_now
+        }
+        saved = Application.objects.filter(
+            pk=self.pk,
+            stage=expected_stage,
+            stage_changed_at=expected_changed_at,
+            previous_stage=stored["previous_stage"],  # non-null: eligible above
+        ).update(**changes)
+        if not saved:  # changed between the read and the write
+            raise stale
+        for name, value in changes.items():
+            setattr(self, name, value)

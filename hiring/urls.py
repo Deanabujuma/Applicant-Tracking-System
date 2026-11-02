@@ -8,4 +8,5 @@ urlpatterns = [
     path("", views.workspace, name="workspace"),
     path("applications/new/", views.application_create, name="application_create"),
     path("applications/<int:pk>/move/", views.move_application, name="move"),
+    path("applications/<int:pk>/undo/", views.undo_application, name="undo"),
 ]
