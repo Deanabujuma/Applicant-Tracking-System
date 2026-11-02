@@ -29,6 +29,53 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-01 — Phase 7 (the hiring workspace) via `/implement`
+
+*(Continues the same session as the Phase 6 entry below. That entry's last prompt (9) also began Phase 7 and asked for up to three test-first behaviors and the decisions, so the prompts here start from their approval. Long prompts are condensed to their substance; nothing is added that the prompt did not say.)*
+
+### Prompts
+1. Approved the three Phase 7 test-first behaviors (1: the sidebar; 2: opening selection with stage counts and the applicant list, including All Openings; 3: a read-only applicant detail panel) and decisions 1–3 (1: `/` defaults to All Openings; 2: lightweight HTMX navigation with a reusable `_workspace.html` partial and normal link fallbacks, added in Test 2; 3: archived candidates' applications stay visible, marked Archived). Write Test 1 for the sidebar (All Openings first; every opening with title, department, Open/Closed status and an active-applicant count of Applied through Offer only; a warning only for Closed openings that still have active applicants, also on the opening's own page; nothing modified) and show RED.
+2. Approved Test 1 RED. Implement GREEN: the full page plus a `_workspace.html` partial; All Openings linking to `/?opening=all`; counts using `ACTIVE_STAGES`; the warning in the sidebar and on the detail page; Test 1's markup; a Workspace link in the header; a minimal main area; no HTMX until Test 2; read-only GET; no unnecessary dependencies, migrations or features.
+3. Approved Test 1 GREEN. Write Test 2 for opening selection (`/` defaults to All Openings; `/?opening=<pk>` selects one; counts for all eight stages, including completed ones, and a total; only that opening's applicants; `/?opening=all` lists every application with its job title; archived candidates marked Archived; sidebar counts still active-only; an HTMX request gets only the partial and a normal GET the full page; links with `hx-get`, `hx-target="#workspace"`, `hx-push-url="true"` and `href` fallbacks; nothing modified; no moves, Undo, search, sorting or filters) and show RED.
+4. Approved Test 2 RED and its four failures. Implement GREEN: one row per application, not per candidate; ordered by last name, first name and ID; `ACTIVE_STAGES` only for the sidebar; the partial with a full-page fallback; `hx-swap="outerHTML"`; the full page for `HX-History-Restore-Request`, with Vary headers; `aria-current="page"` on the selected link; existing sidebar counts and warnings kept; no record changes; nothing from Phases 8–10.
+5. Approved Test 2 GREEN. Write Test 3 for the detail panel (rows link to `/?opening=<scope>&application=<pk>`; the Application is selected, not the Candidate; name, email, source, opening, stage and Archived shown; All Openings kept as the scope; only the selected opening's applications selectable, never one from another opening; read-only, with no stage forms, POSTs or Undo; normal and HTMX requests; no record or timestamp changes; sidebar, counts, total and list kept) and show RED.
+6. Approved Test 3 RED and its three failures, and approved a 404 for an application that exists but belongs to another selected opening. Implement GREEN: the row links with HTMX attributes; `<aside id="application-detail" data-selected="<pk>">`; the details and Archived indicator; All Openings kept; 404 for nonexistent or out-of-scope applications; `aria-current="true"` only on the selected row; strictly read-only; normal and HTMX requests; no record changes; no unnecessary dependencies, migrations or JavaScript.
+7. Approved Test 3 GREEN; all three test-first behaviors complete. Add regression tests: anonymous and deactivated users; 400 for malformed and 404 for nonexistent or out-of-scope IDs; the full page for ordinary GETs and history restores and the partial for HTMX navigation; the Vary header; an empty database; an opening with no applications; the Archived badge; rows linking to application IDs, not candidate IDs; exactly one workspace and stage summary and at most one detail panel; no mutation controls in the panel; no record or timestamp changes; sidebar counts and warnings. Fix genuine regressions only.
+8. Reported the manual browser testing as approved, with all four checks passing: All Openings shows the eight stages, totals and applicant list; selecting Data Analyst #1 shows only its applications and updates the URL; selecting Ana Lopez shows the correct read-only details; Back and Forward keep the right opening and applicant selected; screenshots confirm these. Update PROMPTS.md (keeping every earlier entry), run all checks, review git status, commit Phase 7, push, confirm a clean tree, report the commit and test count, then begin Phase 8 with `/implement`, propose up to three test-first behaviors for confirmed stage moves and only the decisions that need approval, and stop (this prompt).
+
+### Summary
+- **Outcome:**
+  - **The view:** `hiring.views.workspace` at `/`, GET only and read-only.
+    - **Opening scope:** `?opening=all` (the default) or `?opening=<pk>`.
+    - **Application selection:** `&application=<pk>`, looked up only within the current scope, so an application from another opening is a 404.
+    - **Errors:** 400 for values that aren't integers and 404 for records that don't exist.
+    - **Responses:** HTMX navigation gets just the partial; ordinary GETs and history restores get the full page. Every response carries `Vary: HX-Request, HX-History-Restore-Request`.
+  - **The `hiring/_workspace.html` partial:**
+    - **The sidebar:** All Openings, then every opening with its department, status, an active-applicant count from `ACTIVE_STAGES`, and a ⚠ for Closed openings with active applicants. The selected link is marked `aria-current="page"`.
+    - **The main area:** all eight stage counts, including Hired, Rejected and Withdrawn, and a total.
+    - **The applicant list:** one row per application, ordered by last name, first name and ID, with an Archived badge and, in All Openings, the job title. Each row links to its application, with `aria-current="true"` on the selected row.
+    - **The detail panel:** a read-only panel showing name, email, source, opening and stage.
+    - **Navigation:** every link has a normal `href`, plus `hx-get`, `hx-target="#workspace"`, `hx-swap="outerHTML"` and `hx-push-url="true"`.
+  - **Elsewhere:**
+    - The opening detail page warns when a Closed opening still has active applicants, using `opening.applications.active()` so `openings` never imports `hiring`.
+    - A Workspace link in the header.
+    - No migrations, dependencies or new JavaScript.
+  - **Tests:** 3 test-first behaviors and 31 regression tests; 275 passing in all. Ruff, `check`, `makemigrations --check` and `migrate --check` are clean.
+  - **Manual testing (as reported):** the four checks in prompt 8 all passed, confirmed by screenshots.
+- **TDD results:**
+  - **Test 1:** RED was 1 assertion failure (the placeholder page had no sidebar). GREEN passed with 237 tests in total.
+  - **Test 2:** RED was 4 assertion failures (no selected link, and HTMX getting the full page). GREEN passed with 241 tests.
+  - **Test 3:** RED was 3 assertion failures (rows not linked, no detail panel, 200 instead of 404). GREEN passed with 244 tests.
+- **Deviations:**
+  - The user added the 404 for an application from another opening, which I had proposed, as an explicit approval in prompt 6.
+  - In Test 2's RED report I proposed four additions beyond prompt 3: `hx-swap="outerHTML"`, the full page for history restores (plus a `Vary` header), `aria-current="page"`, and the eight-stage summary for All Openings. Prompt 4 approved them as requirements.
+- **Sideways:**
+  - **The non-GET gap:** the regression tests found that `workspace` had no method restriction, so POST, PUT, PATCH and DELETE to `/` returned 200 and rendered the page. Nothing was written, but my Test 2 and Test 3 reports had wrongly called the view GET-only.
+    - **The fix:** a single `@require_GET`; those requests now return 405.
+    - It was the only app-code change in that step; every other regression test passed on its first run.
+  - **A failed edit:** during Test 1 GREEN, one edit to `openings/views.py` didn't match because Ruff had already reformatted the line; it was re-applied after re-reading.
+  - **The detail-page warning:** it uses `role="status"`, so it doesn't collide with the message-alert pattern earlier tests look for.
+
 ## 2026-11-01 — Phase 6 (archive and unarchive candidates) via `/implement`
 
 *(Continues the same session as the Phase 5 entry below. That entry's last prompt (9) also asked to begin Phase 6 and propose up to three test-first behaviors and the decisions, so the prompts here start from its approval. Long prompts are condensed to their substance; nothing is added that the prompt did not say.)*

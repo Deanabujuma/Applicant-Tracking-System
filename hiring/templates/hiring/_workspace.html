@@ -1,0 +1,73 @@
+{# The reusable hiring workspace: sidebar of openings plus the selected scope. Read-only. Rendered inside workspace.html for normal GETs and on its own for HTMX navigation, which swaps this whole element. #}
+<div id="workspace" class="lg:grid lg:grid-cols-12 gap-4">
+  <aside class="lg:col-span-3 bg-base-100 rounded-box shadow-sm p-2 mb-4 lg:mb-0">
+    <div class="font-semibold px-3 py-2">Openings</div>
+    <ul id="openings-sidebar" class="menu menu-sm w-full">
+      <li><a href="{% url 'hiring:workspace' %}?opening=all" hx-get="{% url 'hiring:workspace' %}?opening=all" hx-target="#workspace" hx-swap="outerHTML" hx-push-url="true"{% if not selected %} aria-current="page" class="menu-active"{% endif %}>All Openings</a></li>
+      {% for opening in openings %}
+      <li data-opening="{{ opening.pk }}">
+        <a href="{% url 'hiring:workspace' %}?opening={{ opening.pk }}" hx-get="{% url 'hiring:workspace' %}?opening={{ opening.pk }}" hx-target="#workspace" hx-swap="outerHTML" hx-push-url="true"{% if selected.pk == opening.pk %} aria-current="page"{% endif %} class="flex justify-between{% if selected.pk == opening.pk %} menu-active{% endif %}">
+          <span class="flex flex-col">
+            <span>{{ opening }}</span>
+            <span class="text-xs opacity-60">{{ opening.department }} · {{ opening.get_status_display }}</span>
+          </span>
+          <span class="flex items-center gap-1">
+            {% if opening.status == "closed" and opening.active_count %}<span title="Closed but still has active applicants" aria-label="Closed but still has active applicants">⚠</span>{% endif %}
+            <span class="badge badge-sm" title="Active applicants">{{ opening.active_count }}</span>
+          </span>
+        </a>
+      </li>
+      {% empty %}
+      <li class="opacity-60 p-3 text-sm">No openings yet.</li>
+      {% endfor %}
+    </ul>
+  </aside>
+  <section class="lg:col-span-9 flex flex-col gap-4">
+    <div>
+      <h1 class="text-2xl font-semibold">{% if selected %}{{ selected.title }}{% else %}All Openings{% endif %}</h1>
+      {% if selected %}<p class="text-sm opacity-70">{{ selected.department }} · {{ selected.get_status_display }}</p>{% endif %}
+    </div>
+
+    <div class="bg-base-100 rounded-box shadow-sm p-3">
+      <ul id="stage-summary" class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {% for stage, count in stage_counts %}
+        <li data-stage="{{ stage.value }}" class="flex justify-between items-center rounded-box bg-base-200 px-3 py-2 text-sm"><span>{{ stage.label }}</span><span class="badge badge-sm">{{ count }}</span></li>
+        {% endfor %}
+      </ul>
+      <p class="text-sm mt-3">Total applications: <span id="application-total" class="font-semibold">{{ total }}</span></p>
+    </div>
+
+    <div class="bg-base-100 rounded-box shadow-sm p-2">
+      <ul id="applicant-list" class="list">
+        {% for application in applications %}
+        <li data-application="{{ application.pk }}">
+          <a href="{% url 'hiring:workspace' %}?opening={{ scope }}&amp;application={{ application.pk }}" hx-get="{% url 'hiring:workspace' %}?opening={{ scope }}&amp;application={{ application.pk }}" hx-target="#workspace" hx-swap="outerHTML" hx-push-url="true"{% if selected_application.pk == application.pk %} aria-current="true"{% endif %} class="list-row items-center rounded-box hover:bg-base-200{% if selected_application.pk == application.pk %} bg-base-200{% endif %}">
+            <span class="flex flex-col">
+              <span>{{ application.candidate }}{% if application.candidate.is_archived %} <span class="badge badge-ghost badge-sm">Archived</span>{% endif %}</span>
+              {% if not selected %}<span class="text-xs opacity-60">{{ application.opening.title }}</span>{% endif %}
+            </span>
+            <span class="badge badge-outline badge-sm">{{ application.get_stage_display }}</span>
+          </a>
+        </li>
+        {% empty %}
+        <li class="opacity-60 p-3 text-sm">No applications yet.</li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    {% if selected_application %}
+    {% with candidate=selected_application.candidate %}
+    <aside id="application-detail" data-selected="{{ selected_application.pk }}" class="bg-base-100 rounded-box shadow-sm p-4">
+      <h2 class="text-lg font-semibold mb-2">Application #{{ selected_application.pk }}{% if candidate.is_archived %} <span class="badge badge-ghost badge-sm">Archived</span>{% endif %}</h2>
+      <dl class="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-sm">
+        <dt class="opacity-60">Name</dt><dd><a class="link" href="{{ candidate.get_absolute_url }}">{{ candidate }}</a></dd>
+        <dt class="opacity-60">Email</dt><dd>{{ candidate.email }}</dd>
+        <dt class="opacity-60">Source</dt><dd>{{ candidate.get_source_display }}</dd>
+        <dt class="opacity-60">Opening</dt><dd><a class="link" href="{{ selected_application.opening.get_absolute_url }}">{{ selected_application.opening.title }}</a> ({{ selected_application.opening.department }})</dd>
+        <dt class="opacity-60">Stage</dt><dd><span class="badge badge-outline badge-sm">{{ selected_application.get_stage_display }}</span></dd>
+      </dl>
+    </aside>
+    {% endwith %}
+    {% endif %}
+  </section>
+</div>

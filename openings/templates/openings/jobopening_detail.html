@@ -6,6 +6,9 @@
 <div class="card bg-base-100 shadow-sm max-w-2xl">
   <div class="card-body">
     <p class="text-sm opacity-70">Opening #{{ opening.pk }}</p>
+    {% if active_applicant_count %}
+    <div class="alert alert-warning" role="status">⚠ Closed but still has active applicants ({{ active_applicant_count }}). Their applications are unchanged and can still be moved through the stages.</div>
+    {% endif %}
     <h1 class="card-title">{{ opening.title }}</h1>
     <dl class="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2">
       <dt class="font-medium">Department</dt>

@@ -10,7 +10,7 @@ from django.views.generic import (
 )
 
 from .forms import JobOpeningForm, SkillForm
-from .models import JobOpening, Skill
+from .models import JobOpening, OpeningStatus, Skill
 
 
 class JobOpeningListView(ListView):
@@ -31,6 +31,9 @@ class JobOpeningDetailView(DetailView):
     def get_context_data(self, **kwargs):
         # Through the reverse relation only: openings never imports hiring.
         kwargs["applications"] = self.object.applications.select_related("candidate")
+        # A Closed opening that still has active applicants gets a warning.
+        if self.object.status == OpeningStatus.CLOSED:
+            kwargs["active_applicant_count"] = self.object.applications.active().count()
         return super().get_context_data(**kwargs)
 
 
